@@ -88,6 +88,90 @@ class TeamAnalyzer:
 
         return pd.DataFrame(rows)
 
+    def _parse_match_cards_from_html(self, html):
+        """Parse fixtures from rendered match-card HTML fragments."""
+        card_pattern = re.compile(r'<li[^>]*class="[^"]*match-card[^"]*"[^>]*>(.*?)</li>', re.DOTALL | re.IGNORECASE)
+        cards = card_pattern.findall(html)
+
+        rows = []
+        for card in cards:
+            teams = re.findall(
+                r'<span[^>]*data-testid="matchCardTeamFullName"[^>]*>(.*?)</span>',
+                card,
+                flags=re.DOTALL | re.IGNORECASE,
+            )
+            teams = [re.sub(r'<[^>]+>', '', team).strip() for team in teams if team.strip()]
+            if len(teams) < 2:
+                continue
+
+            score_match = re.search(
+                r'<span[^>]*data-testid="matchCardScore"[^>]*>(.*?)</span>',
+                card,
+                flags=re.DOTALL | re.IGNORECASE,
+            )
+            score_text = re.sub(r'<[^>]+>', '', score_match.group(1)).strip() if score_match else ''
+            home_score, away_score = self._extract_score(score_text)
+
+            date_match = re.search(r'<time[^>]*datetime="([^"]+)"', card, flags=re.IGNORECASE)
+            if not date_match:
+                date_match = re.search(r'data-testid="matchCardDate"[^>]*>(.*?)<', card, flags=re.DOTALL | re.IGNORECASE)
+            date_raw = date_match.group(1).strip() if date_match else None
+
+            home, away = teams[0], teams[1]
+            names = {home.lower(), away.lower()}
+            if 'arsenal' not in names:
+                continue
+
+            is_arsenal_home = home.lower() == 'arsenal'
+            rows.append({
+                'date': pd.to_datetime(date_raw, errors='coerce'),
+                'team': 'Arsenal',
+                'opponent': away if is_arsenal_home else home,
+                'venue': 'Home' if is_arsenal_home else 'Away',
+                'goals_scored': home_score if is_arsenal_home else away_score,
+                'goals_conceded': away_score if is_arsenal_home else home_score,
+            })
+
+        if not rows:
+            team_iter = list(re.finditer(r'<span[^>]*data-testid="matchCardTeamFullName"[^>]*>(.*?)</span>', html, flags=re.DOTALL | re.IGNORECASE))
+            score_iter = list(re.finditer(r'<span[^>]*data-testid="matchCardScore"[^>]*>(.*?)</span>', html, flags=re.DOTALL | re.IGNORECASE))
+
+            teams = [
+                (m.start(), re.sub(r'<[^>]+>', '', m.group(1)).strip())
+                for m in team_iter
+                if re.sub(r'<[^>]+>', '', m.group(1)).strip()
+            ]
+
+            for score_m in score_iter:
+                score_idx = score_m.start()
+                before = [team for pos, team in teams if pos < score_idx]
+                after = [team for pos, team in teams if pos > score_idx]
+                if not before or not after:
+                    continue
+
+                home, away = before[-1], after[0]
+                names = {home.lower(), away.lower()}
+                if 'arsenal' not in names:
+                    continue
+
+                score_text = re.sub(r'<[^>]+>', '', score_m.group(1)).strip()
+                home_score, away_score = self._extract_score(score_text)
+                is_arsenal_home = home.lower() == 'arsenal'
+                rows.append({
+                    'date': pd.NaT,
+                    'team': 'Arsenal',
+                    'opponent': away if is_arsenal_home else home,
+                    'venue': 'Home' if is_arsenal_home else 'Away',
+                    'goals_scored': home_score if is_arsenal_home else away_score,
+                    'goals_conceded': away_score if is_arsenal_home else home_score,
+                })
+
+        parsed = pd.DataFrame(rows)
+        if parsed.empty:
+            return parsed
+
+        return parsed.dropna(subset=['opponent']).drop_duplicates(subset=['date', 'opponent', 'goals_scored', 'goals_conceded'])
+
     def _parse_embedded_match_json(self, html):
         """Parse fixtures from non-JSON-LD script blobs used by modern web apps."""
         scripts = re.findall(r'<script[^>]*>(.*?)</script>', html, flags=re.DOTALL | re.IGNORECASE)
@@ -185,6 +269,9 @@ class TeamAnalyzer:
 
         if match_data.empty:
             match_data = self._parse_embedded_match_json(html)
+
+        if match_data.empty:
+            match_data = self._parse_match_cards_from_html(html)
 
         if match_data.empty:
             # Optional fallback when JSON-LD is unavailable.
