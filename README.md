@@ -4,7 +4,7 @@ A lightweight Python project for analyzing football (soccer) team performance us
 
 ## Features
 
-- Loads sample match data into a pandas DataFrame.
+- Loads Arsenal match data from the official Premier League matches page into a pandas DataFrame.
 - Calculates core team statistics:
   - Matches played
   - Goals scored/conceded
@@ -74,7 +74,10 @@ plt.show()
 ## Core API
 
 ### `TeamAnalyzer.load_sample_data()`
-Loads a sample dataset of 10 Arsenal matches into memory.
+Loads Arsenal matches from `https://www.premierleague.com/en/clubs/3/arsenal/matches` and stores them in `match_data`.
+
+### `TeamAnalyzer.load_match_data_from_web(url=...)`
+Fetches and parses match data directly from the page (JSON-LD first, table fallback), then replaces `match_data`.
 
 ### `TeamAnalyzer.calculate_basic_stats(team_name)`
 Returns a pandas `Series` with aggregated statistics for the given team.
