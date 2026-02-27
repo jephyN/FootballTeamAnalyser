@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 from urllib.request import Request, urlopen
+from urllib.error import URLError
 from io import StringIO
 import json
 import re
@@ -45,6 +46,104 @@ class TeamAnalyzer:
 
         return int(score_match.group(1)), int(score_match.group(2))
 
+    @staticmethod
+    def _fetch_html(url):
+        """Fetch HTML content from a URL with browser-like headers."""
+        req = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        )
+        with urlopen(req, timeout=30) as response:
+            return response.read().decode("utf-8", errors="ignore")
+
+    @staticmethod
+    def _extract_match_ids(html):
+        """Extract unique Premier League match IDs from link paths."""
+        match_ids = re.findall(r'/en/match/(\d+)(?:/|"|\?)', html)
+        ordered_unique = []
+        seen = set()
+        for match_id in match_ids:
+            if match_id in seen:
+                continue
+            seen.add(match_id)
+            ordered_unique.append(match_id)
+        return ordered_unique
+
+    @staticmethod
+    def _extract_stat_pair(html, label, include_label=None, exclude_label=None):
+        """Extract a pair of numeric values for home/away teams from a stat row."""
+        pattern = re.compile(
+            rf'{label}(.{{0,300}}?)(\d+(?:\.\d+)?)\s*%?(.{{0,120}}?)(\d+(?:\.\d+)?)\s*%?',
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        for match in pattern.finditer(html):
+            snippet = match.group(0)
+            snippet_lower = snippet.lower()
+            if include_label and include_label.lower() not in snippet_lower:
+                continue
+            if exclude_label and exclude_label.lower() in snippet_lower:
+                continue
+            return float(match.group(2)), float(match.group(4))
+        return np.nan, np.nan
+
+    def _fetch_match_stats(self, match_id, venue):
+        """Fetch possession/shooting stats from the match stats page."""
+        stats_url = f"https://www.premierleague.com/en/match/{match_id}/stats"
+        try:
+            html = self._fetch_html(stats_url)
+        except (URLError, TimeoutError, ValueError):
+            return {}
+
+        possession_home, possession_away = self._extract_stat_pair(html, 'possession')
+        shots_home, shots_away = self._extract_stat_pair(html, 'total shots|shots', exclude_label='on target')
+        shots_on_target_home, shots_on_target_away = self._extract_stat_pair(html, 'shots on target')
+
+        is_home = str(venue).lower() == 'home'
+        return {
+            'possession': possession_home if is_home else possession_away,
+            'shots': shots_home if is_home else shots_away,
+            'shots_on_target': shots_on_target_home if is_home else shots_on_target_away,
+        }
+
+    def _enrich_with_match_stats(self, match_data, matches_html):
+        """Populate possession and shooting columns from per-match stats pages."""
+        if match_data.empty:
+            return match_data
+
+        if 'match_id' not in match_data.columns or match_data['match_id'].isna().all():
+            ids = self._extract_match_ids(matches_html)
+            if ids:
+                count = min(len(ids), len(match_data))
+                match_data = match_data.copy()
+                match_data['match_id'] = pd.Series(ids[:count], index=match_data.index[:count])
+
+        if 'possession' not in match_data.columns:
+            match_data['possession'] = np.nan
+        if 'shots' not in match_data.columns:
+            match_data['shots'] = np.nan
+        if 'shots_on_target' not in match_data.columns:
+            match_data['shots_on_target'] = np.nan
+
+        stats_cache = {}
+        for idx, row in match_data.iterrows():
+            match_id = row.get('match_id')
+            if pd.isna(match_id):
+                continue
+            match_id = str(int(match_id)) if isinstance(match_id, (int, float)) and not pd.isna(match_id) else str(match_id)
+
+            if match_id not in stats_cache:
+                stats_cache[match_id] = self._fetch_match_stats(match_id, row.get('venue', 'Home'))
+
+            stats = stats_cache[match_id]
+            for key in ('possession', 'shots', 'shots_on_target'):
+                if key in stats and pd.notna(stats[key]):
+                    match_data.at[idx, key] = stats[key]
+
+        return match_data
+
     def _parse_ld_json_matches(self, html):
         """Parse SportsEvent entries from JSON-LD blocks in the page."""
         scripts = re.findall(
@@ -84,6 +183,7 @@ class TeamAnalyzer:
                     "venue": "Home" if is_arsenal_home else "Away",
                     "goals_scored": home_score if is_arsenal_home else away_score,
                     "goals_conceded": away_score if is_arsenal_home else home_score,
+                    "match_id": np.nan,
                 })
 
         return pd.DataFrame(rows)
@@ -117,6 +217,9 @@ class TeamAnalyzer:
                 date_match = re.search(r'data-testid="matchCardDate"[^>]*>(.*?)<', card, flags=re.DOTALL | re.IGNORECASE)
             date_raw = date_match.group(1).strip() if date_match else None
 
+            match_link = re.search(r'href="([^"]*/en/match/(\d+)[^"]*)"', card, flags=re.IGNORECASE)
+            match_id = match_link.group(2) if match_link else np.nan
+
             home, away = teams[0], teams[1]
             names = {home.lower(), away.lower()}
             if 'arsenal' not in names:
@@ -130,6 +233,7 @@ class TeamAnalyzer:
                 'venue': 'Home' if is_arsenal_home else 'Away',
                 'goals_scored': home_score if is_arsenal_home else away_score,
                 'goals_conceded': away_score if is_arsenal_home else home_score,
+                'match_id': match_id,
             })
 
         if not rows:
@@ -164,6 +268,7 @@ class TeamAnalyzer:
                     'venue': 'Home' if is_arsenal_home else 'Away',
                     'goals_scored': home_score if is_arsenal_home else away_score,
                     'goals_conceded': away_score if is_arsenal_home else home_score,
+                    'match_id': np.nan,
                 })
 
         parsed = pd.DataFrame(rows)
@@ -244,6 +349,7 @@ class TeamAnalyzer:
                     'venue': 'Home' if is_arsenal_home else 'Away',
                     'goals_scored': home_score if is_arsenal_home else away_score,
                     'goals_conceded': away_score if is_arsenal_home else home_score,
+                    'match_id': item.get('id') or item.get('matchId') or item.get('gameId') or np.nan,
                 })
 
         parsed = pd.DataFrame(rows)
@@ -255,15 +361,10 @@ class TeamAnalyzer:
 
     def load_match_data_from_web(self, url="https://www.premierleague.com/en/clubs/3/arsenal/matches"):
         """Load Arsenal matches from the official Premier League page and replace `match_data`."""
-        req = Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept-Language": "en-US,en;q=0.9",
-            },
-        )
-        with urlopen(req, timeout=30) as response:
-            html = response.read().decode("utf-8", errors="ignore")
+        try:
+            html = self._fetch_html(url)
+        except (URLError, TimeoutError, ValueError):
+            html = ''
 
         match_data = self._parse_ld_json_matches(html)
 
@@ -299,6 +400,7 @@ class TeamAnalyzer:
                         "opponent": table[opp_col],
                         "goals_scored": goals_scored,
                         "goals_conceded": goals_conceded,
+                        "match_id": np.nan,
                     })
 
         if match_data.empty:
@@ -308,6 +410,7 @@ class TeamAnalyzer:
             )
             match_data = self._default_match_data()
 
+        match_data = self._enrich_with_match_stats(match_data, html)
         self.match_data = match_data.sort_values("date").reset_index(drop=True)
 
     def calculate_basic_stats(self, team_name):

@@ -74,10 +74,10 @@ plt.show()
 ## Core API
 
 ### `TeamAnalyzer.load_sample_data()`
-Loads Arsenal matches from `https://www.premierleague.com/en/clubs/3/arsenal/matches` and stores them in `match_data`.
+Loads Arsenal matches from `https://www.premierleague.com/en/clubs/3/arsenal/matches`, then enriches each match with possession/shooting data from per-match stats pages (`/en/match/<id>/.../stats`).
 
 ### `TeamAnalyzer.load_match_data_from_web(url=...)`
-Fetches and parses match data directly from the page (JSON-LD first, table fallback), then replaces `match_data`.
+Fetches and parses match data directly from the page (JSON-LD, embedded JSON, and match-card HTML), then attempts to enrich rows with possession, total shots, and shots on target from each match stats page.
 
 ### `TeamAnalyzer.calculate_basic_stats(team_name)`
 Returns a pandas `Series` with aggregated statistics for the given team.
