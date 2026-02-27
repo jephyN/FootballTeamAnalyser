@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
-from io import StringIO
 from urllib.request import Request, urlopen
 import json
 import re
@@ -88,7 +87,13 @@ class TeamAnalyzer:
         match_data = self._parse_ld_json_matches(html)
 
         if match_data.empty:
-            tables = pd.read_html(StringIO(html))
+            # Optional fallback when JSON-LD is unavailable.
+            # Some environments do not have the optional html parser deps (e.g. lxml).
+            try:
+                tables = pd.read_html(html)
+            except (ImportError, ValueError):
+                tables = []
+
             if tables:
                 table = tables[0].copy()
                 table.columns = [str(col).strip().lower().replace(" ", "_") for col in table.columns]
