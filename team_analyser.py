@@ -3,8 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 from urllib.request import Request, urlopen
+from io import StringIO
 import json
 import re
+import warnings
 
 
 class TeamAnalyzer:
@@ -16,6 +18,20 @@ class TeamAnalyzer:
     def load_sample_data(self):
         """Load sample match data"""
         self.load_match_data_from_web()
+
+    @staticmethod
+    def _default_match_data():
+        """Static fallback data used only when web parsing is unavailable."""
+        return pd.DataFrame({
+            'date': pd.to_datetime(['2024-01-15', '2024-01-22', '2024-01-29', '2024-02-05', '2024-02-12']),
+            'team': ['Arsenal'] * 5,
+            'opponent': ['Liverpool', 'Chelsea', 'Manchester City', 'Tottenham', 'Newcastle'],
+            'goals_scored': [2, 1, 3, 2, 4],
+            'goals_conceded': [1, 2, 0, 1, 1],
+            'possession': [55, 48, 62, 51, 58],
+            'shots': [14, 11, 17, 13, 18],
+            'shots_on_target': [6, 4, 8, 5, 9]
+        })
 
     @staticmethod
     def _extract_score(value):
@@ -72,6 +88,87 @@ class TeamAnalyzer:
 
         return pd.DataFrame(rows)
 
+    def _parse_embedded_match_json(self, html):
+        """Parse fixtures from non-JSON-LD script blobs used by modern web apps."""
+        scripts = re.findall(r'<script[^>]*>(.*?)</script>', html, flags=re.DOTALL | re.IGNORECASE)
+
+        candidates = []
+        for script in scripts:
+            script = script.strip()
+            if not script:
+                continue
+
+            if script.startswith('{') or script.startswith('['):
+                candidates.append(script)
+
+            for match in re.finditer(r'([\[{].*[\]}])', script, flags=re.DOTALL):
+                blob = match.group(1).strip().rstrip(';')
+                if blob.startswith(('{', '[')):
+                    candidates.append(blob)
+
+        def walk(node):
+            if isinstance(node, dict):
+                yield node
+                for value in node.values():
+                    yield from walk(value)
+            elif isinstance(node, list):
+                for item in node:
+                    yield from walk(item)
+
+        rows = []
+        for payload_text in candidates:
+            try:
+                payload = json.loads(payload_text)
+            except json.JSONDecodeError:
+                continue
+
+            for item in walk(payload):
+                home = away = None
+                if isinstance(item.get('homeTeam'), dict) and isinstance(item.get('awayTeam'), dict):
+                    home = item.get('homeTeam', {}).get('name')
+                    away = item.get('awayTeam', {}).get('name')
+                elif isinstance(item.get('teams'), dict):
+                    home = item.get('teams', {}).get('home', {}).get('name')
+                    away = item.get('teams', {}).get('away', {}).get('name')
+
+                if not home or not away:
+                    continue
+
+                names = {home.lower(), away.lower()}
+                if 'arsenal' not in names:
+                    continue
+
+                date_raw = (
+                    item.get('startDate')
+                    or item.get('kickoff')
+                    or item.get('date')
+                    or item.get('matchDate')
+                )
+
+                home_score = item.get('homeScore')
+                away_score = item.get('awayScore')
+
+                if home_score is None or away_score is None:
+                    score_text = item.get('score') or item.get('result') or item.get('name', '')
+                    home_score, away_score = self._extract_score(str(score_text))
+
+                is_arsenal_home = home.lower() == 'arsenal'
+                rows.append({
+                    'date': pd.to_datetime(date_raw, errors='coerce'),
+                    'team': 'Arsenal',
+                    'opponent': away if is_arsenal_home else home,
+                    'venue': 'Home' if is_arsenal_home else 'Away',
+                    'goals_scored': home_score if is_arsenal_home else away_score,
+                    'goals_conceded': away_score if is_arsenal_home else home_score,
+                })
+
+        parsed = pd.DataFrame(rows)
+        if parsed.empty:
+            return parsed
+
+        parsed = parsed.dropna(subset=['opponent']).drop_duplicates(subset=['date', 'opponent', 'goals_scored', 'goals_conceded'])
+        return parsed
+
     def load_match_data_from_web(self, url="https://www.premierleague.com/en/clubs/3/arsenal/matches"):
         """Load Arsenal matches from the official Premier League page and replace `match_data`."""
         req = Request(
@@ -87,10 +184,13 @@ class TeamAnalyzer:
         match_data = self._parse_ld_json_matches(html)
 
         if match_data.empty:
+            match_data = self._parse_embedded_match_json(html)
+
+        if match_data.empty:
             # Optional fallback when JSON-LD is unavailable.
             # Some environments do not have the optional html parser deps (e.g. lxml).
             try:
-                tables = pd.read_html(html)
+                tables = pd.read_html(StringIO(html))
             except (ImportError, ValueError):
                 tables = []
 
@@ -115,7 +215,11 @@ class TeamAnalyzer:
                     })
 
         if match_data.empty:
-            raise ValueError("Unable to parse match data from the Premier League page.")
+            warnings.warn(
+                "Unable to parse match data from the Premier League page. Falling back to default sample data.",
+                RuntimeWarning,
+            )
+            match_data = self._default_match_data()
 
         self.match_data = match_data.sort_values("date").reset_index(drop=True)
 
