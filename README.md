@@ -4,7 +4,7 @@ A lightweight Python project for analyzing football (soccer) team performance us
 
 ## Features
 
-- Loads Arsenal match data from the official Premier League matches page into a pandas DataFrame.
+- Loads Arsenal match data from the SportsData.io Soccer API into a pandas DataFrame.
 - Calculates core team statistics:
   - Matches played
   - Goals scored/conceded
@@ -49,7 +49,7 @@ python team_analyser.py
 What it does:
 
 1. Instantiates `TeamAnalyzer`
-2. Loads built-in sample data
+2. Loads SportsData.io data when `SPORTSDATA_API_KEY` + `SPORTSDATA_MATCHES_URL` are set (otherwise uses fallback sample data)
 3. Prints a performance report for Arsenal
 4. Generates a performance trend figure
 
@@ -74,10 +74,10 @@ plt.show()
 ## Core API
 
 ### `TeamAnalyzer.load_sample_data()`
-Loads Arsenal matches from `https://www.premierleague.com/en/clubs/3/arsenal/matches`, then enriches each match with possession/shooting data from per-match stats pages (`/en/match/<id>/.../stats`).
+Loads Arsenal matches from SportsData.io when environment variables `SPORTSDATA_API_KEY` and `SPORTSDATA_MATCHES_URL` are configured; otherwise falls back to an in-repo sample dataset.
 
-### `TeamAnalyzer.load_match_data_from_web(url=...)`
-Fetches and parses match data directly from the page (JSON-LD, embedded JSON, and match-card HTML), then attempts to enrich rows with possession, total shots, and shots on target from each match stats page.
+### `TeamAnalyzer.load_match_data_from_api(api_url, api_key, team_name="Arsenal")`
+Fetches and parses match data directly from a SportsData.io endpoint using `Ocp-Apim-Subscription-Key`. The parser handles common response field variants (for home/away team names, scores, and match date).
 
 ### `TeamAnalyzer.calculate_basic_stats(team_name)`
 Returns a pandas `Series` with aggregated statistics for the given team.
