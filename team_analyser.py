@@ -262,6 +262,12 @@ class TeamAnalyzer:
         goals_conceded = team_matches.get('goals_conceded', pd.Series(dtype=float)).sum(min_count=1)
         goals_per_game = (goals_scored / matches_played) if matches_played else np.nan
 
+        if not pd.isna(goals_scored):
+            goals_scored = round(float(goals_scored), 2)
+        if not pd.isna(goals_conceded):
+            goals_conceded = round(float(goals_conceded), 2)
+        goal_difference = round(goals_scored - goals_conceded, 2) if not (pd.isna(goals_scored) or pd.isna(goals_conceded)) else np.nan
+
         if 'clean_sheets' in team_matches.columns and team_matches['clean_sheets'].notna().any():
             clean_sheets = int(pd.to_numeric(team_matches['clean_sheets'], errors='coerce').sum())
         elif 'goals_conceded' in team_matches:
@@ -273,7 +279,7 @@ class TeamAnalyzer:
             'matches_played': matches_played,
             'goals_scored': goals_scored,
             'goals_conceded': goals_conceded,
-            'goal_difference': goals_scored - goals_conceded,
+            'goal_difference': goal_difference,
             'avg_possession': team_matches['possession'].mean() if 'possession' in team_matches else np.nan,
             'shot_accuracy': (team_matches['shots_on_target'].sum() / team_matches['shots'].sum() * 100) if {'shots_on_target', 'shots'}.issubset(team_matches.columns) else np.nan,
             'goals_per_game': goals_per_game,
@@ -329,9 +335,9 @@ Performance Report for {team_name}
 Basic Statistics:
 ----------------
 Matches Played: {matches_played_display}
-Goals Scored: {stats['goals_scored']} ({stats['goals_per_game']:.2f} per game)
-Goals Conceded: {stats['goals_conceded']}
-Goal Difference: {stats['goal_difference']}
+Goals Scored: {stats['goals_scored']:.2f} ({stats['goals_per_game']:.2f} per game)
+Goals Conceded: {stats['goals_conceded']:.2f}
+Goal Difference: {stats['goal_difference']:.2f}
 Clean Sheets: {clean_sheets_display}
 
 Performance Metrics:
