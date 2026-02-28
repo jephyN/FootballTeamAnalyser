@@ -1,3 +1,17 @@
+"""
+Team Analyzer
+
+Desktop analytics tool that:
+- Fetches football team season data from API
+- Normalizes payload variations
+- Computes statistics
+- Visualizes trends
+- Provides Tkinter GUI team selection
+
+Designed as a lightweight analytical client application.
+"""
+
+
 import json
 import os
 import warnings
@@ -13,6 +27,7 @@ import pandas as pd
 
 
 class TeamAnalyzer:
+    """Handles data acquisition, normalization, analytics, and reporting."""
     API_URL_TEMPLATE = 'https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/{season}'
     DEFAULT_SEASONS = (2025, 2026)
     DEFAULT_TEAM_NAME = 'Arsenal FC'
@@ -275,7 +290,6 @@ class TeamAnalyzer:
         if season_year is not None and 'season_year' in self.match_data.columns:
             mask = mask & (self.match_data['season_year'] == season_year)
         rounds = self.match_data[mask]
-        num_rounds = len(rounds)
         if 'possession' in rounds.columns and rounds['possession'].notna().any():
             avg_possession = rounds['possession'].mean()
         else:
@@ -518,7 +532,7 @@ def _fetch_logo_pil(url, size=(80, 80)):
             with urlopen(req, timeout=15) as resp:
                 data = resp.read()
             return Image.open(io.BytesIO(data)).convert("RGBA").resize(size, Image.LANCZOS)
-        except Exception as exc:
+        except (OSError, ValueError, RuntimeError) as exc:
             if "429" in str(exc) and attempt < 2:
                 time.sleep(5 * (attempt + 1))
                 continue
@@ -542,7 +556,6 @@ def pick_team_gui(team_list, logos=None):
 
     COLOR_NORMAL   = "white"
     COLOR_SELECTED = "#dce8f5"
-    COLOR_HOVER    = "#f0f0f0"
 
     selected      = [None]
     selected_name = [team_list[0]]
