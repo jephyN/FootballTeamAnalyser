@@ -4,7 +4,7 @@ A lightweight Python project for analyzing football (soccer) team performance us
 
 ## Features
 
-- Loads Arsenal match data from the SportsData.io Soccer API into a pandas DataFrame.
+- Loads Arsenal FC data from the SportsData.io Soccer API into a pandas DataFrame.
 - Calculates core team statistics:
   - Matches played
   - Goals scored/conceded
@@ -42,8 +42,8 @@ Environment configuration (either shell vars or `.env`):
 
 ```bash
 export SPORTSDATA_API_KEY="<your_sportsdata_key>"
-# Optional override; defaults to GamesByTeam/EPL/ARS
-export SPORTSDATA_MATCHES_URL="https://api.sportsdata.io/v4/soccer/scores/json/GamesByTeam/EPL/ARS"
+# Optional override; default is UEFA Champions League TeamSeasonStats for Arsenal
+export SPORTSDATA_MATCHES_URL="https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/2025?key=1527a55559834d689d6e2ad76e950fb4"
 ```
 
 Example `.env` file:
@@ -64,7 +64,7 @@ python team_analyser.py
 What it does:
 
 1. Instantiates `TeamAnalyzer`
-2. Loads SportsData.io data using `SPORTSDATA_API_KEY` (and optional `SPORTSDATA_MATCHES_URL`; defaults to `GamesByTeam/EPL/ARS`)
+2. Loads SportsData.io data using `SPORTSDATA_API_KEY` (and optional `SPORTSDATA_MATCHES_URL`; defaults to `TeamSeasonStats/3/2025` URL configured for Arsenal FC)
 3. Prints a performance report for Arsenal
 4. Generates a performance trend figure
 
@@ -89,10 +89,10 @@ plt.show()
 ## Core API
 
 ### `TeamAnalyzer.load_sample_data()`
-Loads Arsenal matches from SportsData.io when `SPORTSDATA_API_KEY` is configured (the loader also reads `.env` and supports `key` as a fallback variable name). It uses `SPORTSDATA_MATCHES_URL` if provided, otherwise defaults to `https://api.sportsdata.io/v4/soccer/scores/json/GamesByTeam/EPL/ARS`. If API loading fails, it falls back to in-repo sample data.
+Loads Arsenal FC data from SportsData.io when `SPORTSDATA_API_KEY` is configured (the loader also reads `.env` and supports `key` as a fallback variable name). It uses `SPORTSDATA_MATCHES_URL` if provided, otherwise defaults to `https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/2025?key=1527a55559834d689d6e2ad76e950fb4`. Only Arsenal FC rows are selected from API payloads. If API loading fails, it falls back to in-repo sample data.
 
 ### `TeamAnalyzer.load_match_data_from_api(api_url, api_key, team_name="Arsenal")`
-Fetches and parses match data directly from a SportsData.io endpoint using `Ocp-Apim-Subscription-Key`. The parser handles common response field variants (for home/away team names, scores, and match date).
+Fetches and parses data from SportsData.io using `Ocp-Apim-Subscription-Key`. Supports both game-level payloads and `TeamSeasonStats` payloads and filters to Arsenal FC only.
 
 ### `TeamAnalyzer.calculate_basic_stats(team_name)`
 Returns a pandas `Series` with aggregated statistics for the given team.
@@ -107,13 +107,7 @@ Builds and returns a formatted text report based on computed statistics.
 
 ## Notes
 
-- The current script includes executable example code at module level.
-- For reuse as a package/module, consider moving example execution under:
-
-```python
-if __name__ == "__main__":
-    ...
-```
+- Example execution is already guarded under `if __name__ == "__main__":`.
 
 ## License
 
