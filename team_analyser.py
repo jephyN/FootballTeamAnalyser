@@ -49,20 +49,6 @@ class TeamAnalyzer:
         return json.loads(payload)
 
     @staticmethod
-    def _normalize_games_payload(payload):
-        """Normalize SportsData.io game responses to a list of game-like dicts."""
-        if isinstance(payload, list):
-            return payload
-
-        if isinstance(payload, dict):
-            for key in ('games', 'Games', 'data', 'Data', 'matches', 'Matches'):
-                value = payload.get(key)
-                if isinstance(value, list):
-                    return value
-
-        return []
-
-    @staticmethod
     def _normalize_team_season_payload(payload):
         """Normalize SportsData.io TeamSeasonStats responses to list form."""
         if isinstance(payload, list):
@@ -135,39 +121,8 @@ class TeamAnalyzer:
         return normalized == requested
 
     @staticmethod
-    def _extract_row(game, team_name):
-        """Convert one SportsData.io game payload into the local match row schema."""
-        home_team = TeamAnalyzer._pick_value(game, 'HomeTeamName', 'HomeTeam', 'HomeTeamKey', 'HomeTeamCode')
-        away_team = TeamAnalyzer._pick_value(game, 'AwayTeamName', 'AwayTeam', 'AwayTeamKey', 'AwayTeamCode')
-
-        if pd.isna(home_team) or pd.isna(away_team):
-            return None
-
-        home_name = str(home_team).strip()
-        away_name = str(away_team).strip()
-        is_team_home = TeamAnalyzer._team_matches(home_name, team_name)
-        is_team_away = TeamAnalyzer._team_matches(away_name, team_name)
-        if not (is_team_home or is_team_away):
-            return None
-
-        home_score = TeamAnalyzer._pick_value(game, 'HomeTeamScore', 'HomeScore', 'ScoreHome')
-        away_score = TeamAnalyzer._pick_value(game, 'AwayTeamScore', 'AwayScore', 'ScoreAway')
-
-        return {
-            'date': pd.to_datetime(TeamAnalyzer._pick_value(game, 'Day', 'DateTime', 'MatchTime', 'Date'), errors='coerce'),
-            'team': 'Arsenal FC',
-            'opponent': away_name if is_team_home else home_name,
-            'venue': 'Home' if is_team_home else 'Away',
-            'goals_scored': home_score if is_team_home else away_score,
-            'goals_conceded': away_score if is_team_home else home_score,
-            'possession': TeamAnalyzer._pick_value(game, 'Possession', 'PossessionPct'),
-            'shots': TeamAnalyzer._pick_value(game, 'Shots', 'TeamShots'),
-            'shots_on_target': TeamAnalyzer._pick_value(game, 'ShotsOnGoal', 'ShotsOnTarget'),
-        }
-
-    @staticmethod
     def _extract_team_season_row(team_stats, team_name='Arsenal FC'):
-        """Convert TeamSeasonStats payload into the local row schema."""
+        """Convert TeamSeasonStats payload into one season-aggregate row for Arsenal FC."""
         source_team = TeamAnalyzer._pick_value(team_stats, 'Name', 'TeamName', 'Team', 'TeamKey')
         if not TeamAnalyzer._team_matches(source_team, team_name):
             return None
@@ -176,18 +131,22 @@ class TeamAnalyzer:
         season_year = pd.to_numeric(season, errors='coerce')
         season_date = pd.to_datetime(f"{int(season_year)}-12-31", errors='coerce') if not pd.isna(season_year) else pd.NaT
 
+        clean_sheets = TeamAnalyzer._pick_value(team_stats, 'GoalkeeperCleanSheets', 'DefenderCleanSheets', 'CleanSheets')
+
         return {
             'date': season_date,
             'team': 'Arsenal FC',
-            'opponent': 'Season Aggregate',
-            'venue': 'N/A',
-            'goals_scored': TeamAnalyzer._pick_value(team_stats, 'Goals', 'GoalsScored', 'TeamGoals'),
-            'goals_conceded': TeamAnalyzer._pick_value(team_stats, 'OpponentGoals', 'GoalsAgainst', 'GoalsConceded'),
+            'opponent': 'All Teams (Season Aggregate)',
+            'venue': 'Season',
+            'goals_scored': TeamAnalyzer._pick_value(team_stats, 'Score', 'Goals', 'GoalsScored', 'TeamGoals'),
+            'goals_conceded': TeamAnalyzer._pick_value(team_stats, 'OpponentScore', 'OpponentGoals', 'GoalsAgainst', 'GoalsConceded'),
             'possession': TeamAnalyzer._pick_value(team_stats, 'Possession', 'PossessionPct', 'PossessionPercentage'),
             'shots': TeamAnalyzer._pick_value(team_stats, 'Shots', 'ShotsTotal', 'TeamShots'),
             'shots_on_target': TeamAnalyzer._pick_value(team_stats, 'ShotsOnGoal', 'ShotsOnTarget'),
             'matches_in_sample': TeamAnalyzer._pick_value(team_stats, 'Games', 'GamesPlayed', 'Matches', 'MatchesPlayed'),
-            'clean_sheets': TeamAnalyzer._pick_value(team_stats, 'CleanSheets'),
+            'clean_sheets': clean_sheets,
+            'season_type': TeamAnalyzer._pick_value(team_stats, 'SeasonType'),
+            'team_id': TeamAnalyzer._pick_value(team_stats, 'TeamId'),
         }
 
     @classmethod
@@ -213,7 +172,7 @@ class TeamAnalyzer:
             self.match_data = self._default_match_data()
 
     def load_match_data_from_api(self, api_url, api_key, team_name=DEFAULT_TEAM_NAME):
-        """Load matches from a SportsData.io endpoint and replace `match_data`."""
+        """Load season-aggregate TeamSeasonStats rows and replace `match_data`."""
         cleaned_url, key_from_url = self._extract_api_key_from_url(api_url)
         resolved_api_key = api_key or key_from_url
         if not resolved_api_key:
@@ -226,26 +185,17 @@ class TeamAnalyzer:
         payload = self._fetch_json(cleaned_url, headers=headers)
         rows = []
 
-        games = self._normalize_games_payload(payload)
-        for game in games:
-            if not isinstance(game, dict):
-                continue
-            row = self._extract_row(game, team_name=team_name)
+        season_rows = self._normalize_team_season_payload(payload)
+        for season_row in season_rows:
+            row = self._extract_team_season_row(season_row, team_name=team_name)
             if row:
                 rows.append(row)
-
-        if not rows:
-            season_rows = self._normalize_team_season_payload(payload)
-            for season_row in season_rows:
-                row = self._extract_team_season_row(season_row, team_name=team_name)
-                if row:
-                    rows.append(row)
 
         if not rows:
             raise ValueError('No Arsenal FC data parsed from SportsData.io response.')
 
         match_data = pd.DataFrame(rows)
-        numeric_cols = ['goals_scored', 'goals_conceded', 'possession', 'shots', 'shots_on_target', 'matches_in_sample', 'clean_sheets']
+        numeric_cols = ['goals_scored', 'goals_conceded', 'possession', 'shots', 'shots_on_target', 'matches_in_sample', 'clean_sheets', 'season_type', 'team_id']
         for col in numeric_cols:
             if col in match_data.columns:
                 match_data[col] = pd.to_numeric(match_data[col], errors='coerce')

@@ -4,7 +4,7 @@ A lightweight Python project for analyzing football (soccer) team performance us
 
 ## Features
 
-- Loads Arsenal FC data from the SportsData.io Soccer API into a pandas DataFrame.
+- Loads Arsenal FC season-aggregate data from the SportsData.io TeamSeasonStats endpoint into a pandas DataFrame.
 - Calculates core team statistics:
   - Matches played
   - Goals scored/conceded
@@ -64,7 +64,7 @@ python team_analyser.py
 What it does:
 
 1. Instantiates `TeamAnalyzer`
-2. Loads SportsData.io data using `SPORTSDATA_API_KEY` (and optional `SPORTSDATA_MATCHES_URL`; defaults to `TeamSeasonStats/3/2025` URL configured for Arsenal FC)
+2. Loads TeamSeasonStats season totals (all teams in season) and filters to Arsenal FC only
 3. Prints a performance report for Arsenal
 4. Generates a performance trend figure
 
@@ -79,20 +79,20 @@ import matplotlib.pyplot as plt
 analyzer = TeamAnalyzer()
 analyzer.load_sample_data()
 
-report = analyzer.generate_report("Arsenal")
+report = analyzer.generate_report("Arsenal FC")
 print(report)
 
-fig = analyzer.plot_performance_trends("Arsenal")
+fig = analyzer.plot_performance_trends("Arsenal FC")
 plt.show()
 ```
 
 ## Core API
 
 ### `TeamAnalyzer.load_sample_data()`
-Loads Arsenal FC data from SportsData.io when `SPORTSDATA_API_KEY` is configured (the loader also reads `.env`). It uses `SPORTSDATA_MATCHES_URL` if provided, otherwise defaults to `https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/2025` and the built-in API key. Only Arsenal FC rows are selected from API payloads. If API loading fails, it falls back to in-repo sample data.
+Loads Arsenal FC season totals from SportsData.io TeamSeasonStats when configured (the loader also reads `.env`). The TeamSeasonStats response contains season aggregates for all teams, and the loader explicitly filters to Arsenal FC rows only. If API loading fails, it falls back to in-repo sample data.
 
 ### `TeamAnalyzer.load_match_data_from_api(api_url, api_key, team_name="Arsenal")`
-Fetches and parses data from SportsData.io using `Ocp-Apim-Subscription-Key`. Supports both game-level payloads and `TeamSeasonStats` payloads and filters to Arsenal FC only.
+Fetches and parses TeamSeasonStats data from SportsData.io using `Ocp-Apim-Subscription-Key`, then keeps only Arsenal FC season rows.
 
 ### `TeamAnalyzer.calculate_basic_stats(team_name)`
 Returns a pandas `Series` with aggregated statistics for the given team.
