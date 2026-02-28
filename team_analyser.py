@@ -12,7 +12,8 @@ import pandas as pd
 
 
 class TeamAnalyzer:
-    DEFAULT_API_URL = 'https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/2025?key=1527a55559834d689d6e2ad76e950fb4'
+    DEFAULT_API_URL = 'https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/2025'
+    DEFAULT_API_KEY = '1527a55559834d689d6e2ad76e950fb4'
     DEFAULT_TEAM_NAME = 'Arsenal FC'
 
     def __init__(self):
@@ -198,7 +199,7 @@ class TeamAnalyzer:
         self._load_env_file()
         resolved_api_url = api_url or os.getenv('SPORTSDATA_MATCHES_URL') or self._default_api_url()
         resolved_api_url, key_from_url = self._extract_api_key_from_url(resolved_api_url)
-        resolved_api_key = api_key or os.getenv('SPORTSDATA_API_KEY') or os.getenv('key') or key_from_url
+        resolved_api_key = api_key or os.getenv('SPORTSDATA_API_KEY') or key_from_url or self.DEFAULT_API_KEY
 
         if not resolved_api_key:
             warnings.warn('SPORTSDATA_API_KEY is not configured. Using fallback sample data.', RuntimeWarning)

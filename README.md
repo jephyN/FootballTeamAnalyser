@@ -43,14 +43,14 @@ Environment configuration (either shell vars or `.env`):
 ```bash
 export SPORTSDATA_API_KEY="<your_sportsdata_key>"
 # Optional override; default is UEFA Champions League TeamSeasonStats for Arsenal
-export SPORTSDATA_MATCHES_URL="https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/2025?key=1527a55559834d689d6e2ad76e950fb4"
+export SPORTSDATA_MATCHES_URL="https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/2025"
 ```
 
 Example `.env` file:
 
 ```dotenv
-key=1527a55559834d689d6e2ad76e950fb4
 SPORTSDATA_API_KEY=1527a55559834d689d6e2ad76e950fb4
+SPORTSDATA_MATCHES_URL=https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/2025
 ```
 
 ## Quick Start
@@ -89,7 +89,7 @@ plt.show()
 ## Core API
 
 ### `TeamAnalyzer.load_sample_data()`
-Loads Arsenal FC data from SportsData.io when `SPORTSDATA_API_KEY` is configured (the loader also reads `.env` and supports `key` as a fallback variable name). It uses `SPORTSDATA_MATCHES_URL` if provided, otherwise defaults to `https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/2025?key=1527a55559834d689d6e2ad76e950fb4`. Only Arsenal FC rows are selected from API payloads. If API loading fails, it falls back to in-repo sample data.
+Loads Arsenal FC data from SportsData.io when `SPORTSDATA_API_KEY` is configured (the loader also reads `.env`). It uses `SPORTSDATA_MATCHES_URL` if provided, otherwise defaults to `https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/2025` and the built-in API key. Only Arsenal FC rows are selected from API payloads. If API loading fails, it falls back to in-repo sample data.
 
 ### `TeamAnalyzer.load_match_data_from_api(api_url, api_key, team_name="Arsenal")`
 Fetches and parses data from SportsData.io using `Ocp-Apim-Subscription-Key`. Supports both game-level payloads and `TeamSeasonStats` payloads and filters to Arsenal FC only.
