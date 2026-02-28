@@ -1,10 +1,17 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+"""
+Team performance analysis utilities.
+
+Provides statistical analysis and visualization tools for football team match data.
+"""
+
 from datetime import datetime
+
+import matplotlib.pyplot as plt
+import pandas as pd
 
 
 class TeamAnalyzer:
+    """Analyze football team performance using match statistics and visualizations."""
     def __init__(self):
         """Initialize the analyzer with empty data structures"""
         self.team_data = None
@@ -34,11 +41,20 @@ class TeamAnalyzer:
             'matches_played': len(team_matches),
             'goals_scored': team_matches['goals_scored'].sum(),
             'goals_conceded': team_matches['goals_conceded'].sum(),
-            'goal_difference': team_matches['goals_scored'].sum() - team_matches['goals_conceded'].sum(),
+            'goal_difference': (
+                team_matches['goals_scored'].sum()
+                - team_matches['goals_conceded'].sum()
+            ),
             'avg_possession': team_matches['possession'].mean(),
-            'shot_accuracy': (team_matches['shots_on_target'].sum() / team_matches['shots'].sum() * 100),
+            'shot_accuracy': (
+                team_matches['shots_on_target'].sum()
+                / team_matches['shots'].sum()
+                * 100
+            ),
             'goals_per_game': team_matches['goals_scored'].mean(),
-            'clean_sheets': len(team_matches[team_matches['goals_conceded'] == 0])
+            'clean_sheets': len(
+                team_matches[team_matches['goals_conceded'] == 0]
+            ),
         }
 
         return pd.Series(stats)
@@ -94,8 +110,8 @@ Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         return report
 
 
-# Example usage
-analyzer = TeamAnalyzer()
-analyzer.load_sample_data()
-print(analyzer.generate_report("Arsenal"))
-analyzer.plot_performance_trends("Arsenal")
+if __name__ == "__main__":
+    analyzer = TeamAnalyzer()
+    analyzer.load_sample_data()
+    print(analyzer.generate_report("Arsenal"))
+    analyzer.plot_performance_trends("Arsenal")
