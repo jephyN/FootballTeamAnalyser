@@ -280,7 +280,7 @@ class TeamAnalyzer:
             'clean_sheets': clean_sheets,
         }
 
-        return pd.Series(stats)
+        return pd.Series(stats, dtype='object')
 
     def plot_performance_trends(self, team_name):
         """Plot performance trends over time."""
@@ -320,16 +320,19 @@ class TeamAnalyzer:
         """Generate a comprehensive performance report."""
         stats = self.calculate_basic_stats(team_name)
 
+        matches_played_display = int(stats['matches_played']) if not pd.isna(stats['matches_played']) else 'N/A'
+        clean_sheets_display = int(stats['clean_sheets']) if not pd.isna(stats['clean_sheets']) else 'N/A'
+
         report = f"""
 Performance Report for {team_name}
 
 Basic Statistics:
 ----------------
-Matches Played: {stats['matches_played']}
+Matches Played: {matches_played_display}
 Goals Scored: {stats['goals_scored']} ({stats['goals_per_game']:.2f} per game)
 Goals Conceded: {stats['goals_conceded']}
 Goal Difference: {stats['goal_difference']}
-Clean Sheets: {stats['clean_sheets']}
+Clean Sheets: {clean_sheets_display}
 
 Performance Metrics:
 ------------------
