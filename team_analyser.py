@@ -50,18 +50,65 @@ class TeamAnalyzer:
 
     @staticmethod
     def _normalize_team_season_payload(payload):
-        """Normalize SportsData.io TeamSeasonStats responses to list form."""
+        """Normalize TeamSeasonStats/Round payloads to a flat TeamSeason row list."""
+
+        def _coerce_team_seasons(items, round_context=None):
+            rows = []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+
+                team_seasons = item.get('TeamSeasons')
+                if isinstance(team_seasons, list):
+                    context = {
+                        'Season': item.get('Season'),
+                        'SeasonType': item.get('SeasonType'),
+                        'RoundId': item.get('RoundId'),
+                        'RoundName': item.get('Name'),
+                    }
+                    for team_row in team_seasons:
+                        if not isinstance(team_row, dict):
+                            continue
+                        merged = dict(team_row)
+                        for key, value in context.items():
+                            if merged.get(key) in (None, '') and value not in (None, ''):
+                                merged[key] = value
+                        rows.append(merged)
+                else:
+                    merged = dict(item)
+                    if round_context:
+                        for key, value in round_context.items():
+                            if merged.get(key) in (None, '') and value not in (None, ''):
+                                merged[key] = value
+                    rows.append(merged)
+            return rows
+
         if isinstance(payload, list):
-            return [item for item in payload if isinstance(item, dict)]
+            return _coerce_team_seasons(payload)
 
         if isinstance(payload, dict):
             for key in ('TeamSeasonStats', 'teamSeasonStats', 'data', 'Data'):
                 value = payload.get(key)
                 if isinstance(value, list):
-                    return [item for item in value if isinstance(item, dict)]
+                    return _coerce_team_seasons(value)
                 if isinstance(value, dict):
-                    return [value]
-            return [payload]
+                    return _coerce_team_seasons([value])
+
+            for key in ('Rounds', 'rounds'):
+                rounds = payload.get(key)
+                if isinstance(rounds, list):
+                    return _coerce_team_seasons(rounds)
+
+            if isinstance(payload.get('TeamSeasons'), list):
+                context = {
+                    'Season': payload.get('Season'),
+                    'SeasonType': payload.get('SeasonType'),
+                    'RoundId': payload.get('RoundId'),
+                    'RoundName': payload.get('Name'),
+                }
+                return _coerce_team_seasons(payload.get('TeamSeasons'), round_context=context)
+
+            return _coerce_team_seasons([payload])
 
         return []
 
@@ -172,7 +219,7 @@ class TeamAnalyzer:
             self.match_data = self._default_match_data()
 
     def load_match_data_from_api(self, api_url, api_key, team_name=DEFAULT_TEAM_NAME):
-        """Load season-aggregate TeamSeasonStats rows and replace `match_data`."""
+        """Load season-aggregate TeamSeason rows and replace `match_data`."""
         cleaned_url, key_from_url = self._extract_api_key_from_url(api_url)
         resolved_api_key = api_key or key_from_url
         if not resolved_api_key:

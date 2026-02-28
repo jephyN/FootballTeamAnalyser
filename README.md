@@ -89,10 +89,10 @@ plt.show()
 ## Core API
 
 ### `TeamAnalyzer.load_sample_data()`
-Loads Arsenal FC season totals from SportsData.io TeamSeasonStats when configured (the loader also reads `.env`). The TeamSeasonStats response contains season aggregates for all teams, and the loader explicitly filters to Arsenal FC rows only. If API loading fails, it falls back to in-repo sample data.
+Loads Arsenal FC season totals from SportsData.io when configured (the loader also reads `.env`). It supports direct TeamSeasonStats payloads and Round payloads that contain nested `TeamSeasons`, then filters to Arsenal FC rows only. If API loading fails, it falls back to in-repo sample data.
 
 ### `TeamAnalyzer.load_match_data_from_api(api_url, api_key, team_name="Arsenal")`
-Fetches and parses TeamSeasonStats data from SportsData.io using `Ocp-Apim-Subscription-Key`, then keeps only Arsenal FC season rows.
+Fetches and parses TeamSeason data from SportsData.io using `Ocp-Apim-Subscription-Key`; supports `Round[]` payloads with nested `TeamSeasons`, then keeps only Arsenal FC season rows.
 
 ### `TeamAnalyzer.calculate_basic_stats(team_name)`
 Returns a pandas `Series` with aggregated statistics for the given team.
