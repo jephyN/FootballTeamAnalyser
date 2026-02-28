@@ -1,16 +1,9 @@
 """
-Team Analyzer
+team_analyzer.py
 
-Desktop analytics tool that:
-- Fetches football team season data from API
-- Normalizes payload variations
-- Computes statistics
-- Visualizes trends
-- Provides Tkinter GUI team selection
-
-Designed as a lightweight analytical client application.
+Handles data acquisition, payload normalisation, statistics calculation,
+and report/chart generation for football team season data.
 """
-
 
 import json
 import os
@@ -25,9 +18,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from logo_utils import _fetch_logo_pil
+
 
 class TeamAnalyzer:
     """Handles data acquisition, normalization, analytics, and reporting."""
+
     API_URL_TEMPLATE = 'https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/{season}'
     DEFAULT_SEASONS = (2025, 2026)
     DEFAULT_TEAM_NAME = 'Arsenal FC'
@@ -35,6 +31,10 @@ class TeamAnalyzer:
     def __init__(self):
         self.team_data = None
         self.match_data = None
+
+    # ------------------------------------------------------------------
+    # Formatting helpers
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _fmt(value, spec='.2f'):
@@ -44,6 +44,10 @@ class TeamAnalyzer:
             return format(value, spec)
         except (TypeError, ValueError):
             return 'N/A'
+
+    # ------------------------------------------------------------------
+    # Fallback data
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _default_match_data(team_name='Arsenal FC'):
@@ -56,6 +60,10 @@ class TeamAnalyzer:
             'shots_on_target': [172, 189],
         })
 
+    # ------------------------------------------------------------------
+    # HTTP / JSON helpers
+    # ------------------------------------------------------------------
+
     @staticmethod
     def _fetch_json(url, headers=None, params=None):
         if params:
@@ -65,6 +73,10 @@ class TeamAnalyzer:
         with urlopen(req, timeout=30) as response:
             payload = response.read().decode('utf-8', errors='ignore')
         return json.loads(payload)
+
+    # ------------------------------------------------------------------
+    # Payload normalisation
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _normalize_team_season_payload(payload):
@@ -122,6 +134,10 @@ class TeamAnalyzer:
             return _coerce_team_seasons([payload])
         return []
 
+    # ------------------------------------------------------------------
+    # Environment / URL helpers
+    # ------------------------------------------------------------------
+
     @staticmethod
     def _load_env_file(env_path='.env'):
         if not os.path.exists(env_path):
@@ -175,8 +191,7 @@ class TeamAnalyzer:
         season_year = pd.to_numeric(season, errors='coerce')
         season_date = (
             pd.to_datetime(f"{int(season_year)}-12-31", errors='coerce')
-            if not pd.isna(season_year)
-            else pd.NaT
+            if not pd.isna(season_year) else pd.NaT
         )
         clean_sheets = TeamAnalyzer._pick_value(
             team_stats, 'GoalkeeperCleanSheets', 'DefenderCleanSheets', 'CleanSheets'
@@ -202,6 +217,10 @@ class TeamAnalyzer:
     def _url_for_season(cls, season_year):
         return cls.API_URL_TEMPLATE.format(season=season_year)
 
+    # ------------------------------------------------------------------
+    # Raw data logging
+    # ------------------------------------------------------------------
+
     @staticmethod
     def _log_raw_api_data(season_year, raw_rows, team_name, log_path=None):
         if log_path is None:
@@ -223,6 +242,10 @@ class TeamAnalyzer:
             json.dumps({'arsenal_api_log': existing}, indent=2, default=str),
             encoding='utf-8',
         )
+
+    # ------------------------------------------------------------------
+    # Data loading
+    # ------------------------------------------------------------------
 
     def load_match_data_from_api(self, api_url, api_key, team_name=DEFAULT_TEAM_NAME):
         cleaned_url, key_from_url = self._extract_api_key_from_url(api_url)
@@ -285,6 +308,10 @@ class TeamAnalyzer:
         combined = pd.concat(season_frames, ignore_index=True)
         self.match_data = combined.sort_values('date').reset_index(drop=True)
 
+    # ------------------------------------------------------------------
+    # Statistics
+    # ------------------------------------------------------------------
+
     def calculate_basic_stats(self, team_name, season_year=None):
         mask = self.match_data['team'] == team_name
         if season_year is not None and 'season_year' in self.match_data.columns:
@@ -307,6 +334,10 @@ class TeamAnalyzer:
             'avg_possession': round(avg_possession, 2) if not pd.isna(avg_possession) else np.nan,
             'shot_accuracy': round(shot_accuracy, 2) if not pd.isna(shot_accuracy) else np.nan,
         }, dtype='object')
+
+    # ------------------------------------------------------------------
+    # Competition / team discovery
+    # ------------------------------------------------------------------
 
     COMPETITION_DETAILS_TEMPLATE = (
         'https://api.sportsdata.io/v4/soccer/scores/json/CompetitionDetails/{competition_id}'
@@ -333,11 +364,7 @@ class TeamAnalyzer:
         for team in teams:
             if not isinstance(team, dict):
                 continue
-            name = (
-                team.get('Name')
-                or team.get('TeamName')
-                or team.get('ShortName')
-            )
+            name = team.get('Name') or team.get('TeamName') or team.get('ShortName')
             logo_url = team.get('WikipediaLogoUrl') or team.get('wikipediaLogoUrl')
             if name:
                 logos[str(name).strip()] = logo_url or None
@@ -374,6 +401,10 @@ class TeamAnalyzer:
             return [self.DEFAULT_TEAM_NAME]
         return sorted(team_names)
 
+    # ------------------------------------------------------------------
+    # Report
+    # ------------------------------------------------------------------
+
     def generate_report(self, team_name, seasons=DEFAULT_SEASONS):
         season_stats = {}
         available_seasons = []
@@ -393,7 +424,9 @@ class TeamAnalyzer:
             values = ''
             for yr in available_seasons:
                 raw = season_stats[yr].get(key, np.nan)
-                cell = self._fmt(raw, spec) + suffix if not (raw is None or (isinstance(raw, float) and np.isnan(raw))) else 'N/A'
+                cell = self._fmt(raw, spec) + suffix if not (
+                    raw is None or (isinstance(raw, float) and np.isnan(raw))
+                ) else 'N/A'
                 values += cell.rjust(col_w)
             return f'{label:<{label_w}}{values}'
 
@@ -410,6 +443,10 @@ class TeamAnalyzer:
             separator,
         ]
         return '\n'.join(lines)
+
+    # ------------------------------------------------------------------
+    # Chart
+    # ------------------------------------------------------------------
 
     def plot_performance_trends(self, team_name, seasons=DEFAULT_SEASONS, logo_url=None):
         available_seasons = []
@@ -433,12 +470,9 @@ class TeamAnalyzer:
             for lbl, val in zip(labels, values):
                 if not _is_nan(val):
                     ax.annotate(
-                        f'{val:{fmt}}{suffix}',
-                        (lbl, val),
-                        textcoords='offset points',
-                        xytext=(0, 8),
-                        ha='center',
-                        fontsize=9,
+                        f'{val:{fmt}}{suffix}', (lbl, val),
+                        textcoords='offset points', xytext=(0, 8),
+                        ha='center', fontsize=9,
                     )
 
         logo_img = _fetch_logo_pil(logo_url, size=(52, 52)) if logo_url else None
@@ -456,7 +490,8 @@ class TeamAnalyzer:
             ax1.set_ylabel('Possession (%)')
             ax1.set_ylim(0, 100)
         else:
-            ax1.text(0.5, 0.5, 'Possession data not available', ha='center', va='center', transform=ax1.transAxes)
+            ax1.text(0.5, 0.5, 'Possession data not available',
+                     ha='center', va='center', transform=ax1.transAxes)
             ax1.set_axis_off()
         ax1.legend()
         ax1.grid(axis='y', linestyle='--', alpha=0.6)
@@ -470,7 +505,8 @@ class TeamAnalyzer:
             ax2.set_ylabel('Shot Accuracy (%)')
             ax2.set_ylim(0, 100)
         else:
-            ax2.text(0.5, 0.5, 'Shot accuracy data not available', ha='center', va='center', transform=ax2.transAxes)
+            ax2.text(0.5, 0.5, 'Shot accuracy data not available',
+                     ha='center', va='center', transform=ax2.transAxes)
             ax2.set_axis_off()
         ax2.legend()
         ax2.grid(axis='y', linestyle='--', alpha=0.6)
@@ -493,280 +529,3 @@ class TeamAnalyzer:
         )
 
         return fig
-
-
-# ----------------------------------------------------------------------
-# Logo helpers
-# ----------------------------------------------------------------------
-
-def _wikimedia_thumbnail_url(upload_url, width=320):
-    import re
-    if not upload_url:
-        return upload_url
-    m = re.match(
-        r"https://upload\.wikimedia\.org/wikipedia/([^/]+)/(?:thumb/)?[a-f0-9]/[a-f0-9]{2}/([^/]+?)(?:/\d+px-.+)?$",
-        upload_url,
-    )
-    if not m:
-        return upload_url
-    wiki, filename = m.group(1), m.group(2)
-    host = "commons.wikimedia.org" if wiki == "commons" else f"{wiki}.wikipedia.org"
-    return f"https://{host}/w/thumb.php?f={filename}&w={width}"
-
-
-def _fetch_logo_pil(url, size=(80, 80)):
-    import io
-    import time
-    try:
-        from PIL import Image
-    except ImportError:
-        return None
-    thumb_url = _wikimedia_thumbnail_url(url, width=320)
-    headers = {
-        "User-Agent": "football-team-analyser/1.0 (educational project; python-urllib)",
-        "Accept": "image/png,image/*",
-    }
-    for attempt in range(3):
-        try:
-            req = Request(thumb_url, headers=headers)
-            with urlopen(req, timeout=15) as resp:
-                data = resp.read()
-            return Image.open(io.BytesIO(data)).convert("RGBA").resize(size, Image.LANCZOS)
-        except (OSError, ValueError, RuntimeError) as exc:
-            if "429" in str(exc) and attempt < 2:
-                time.sleep(5 * (attempt + 1))
-                continue
-            break
-    return None
-
-
-def pick_team_gui(team_list, logos=None):
-    import tkinter as tk
-    import threading
-    import queue
-
-    if logos is None:
-        logos = {}
-
-    ICON_SIZE    = 24
-    ITEM_H       = 36
-    WIN_W        = 440
-    VISIBLE_ROWS = 12
-    WIN_H        = ITEM_H * VISIBLE_ROWS + 90
-
-    COLOR_NORMAL   = "white"
-    COLOR_SELECTED = "#dce8f5"
-
-    selected      = [None]
-    selected_name = [team_list[0]]
-    running       = [True]
-
-    root = tk.Tk()
-    root.title("Football Team Analyser — Select Team")
-    root.resizable(False, False)
-
-    root.update_idletasks()
-    x = (root.winfo_screenwidth()  // 2) - (WIN_W // 2)
-    y = (root.winfo_screenheight() // 2) - (WIN_H // 2)
-    root.geometry(f"{WIN_W}x{WIN_H}+{x}+{y}")
-    root.configure(bg="#f5f5f5")
-
-    # -------------------------------------------------
-    # placeholder icon
-    # -------------------------------------------------
-
-    def _make_placeholder(size=ICON_SIZE):
-        img = tk.PhotoImage(width=size, height=size)
-        row = "{" + " ".join(["#dddddd"] * size) + "}"
-        img.put(" ".join([row] * size))
-        return img
-
-    placeholder = _make_placeholder()
-
-    tk.Label(
-        root,
-        text="Select a team:",
-        font=("Helvetica", 11, "bold"),
-        bg="#f5f5f5",
-    ).pack(pady=(12, 6))
-
-    frame = tk.Frame(root, bg="#f5f5f5")
-    frame.pack(fill="both", expand=True, padx=20)
-
-    canvas = tk.Canvas(
-        frame,
-        bg="white",
-        width=WIN_W - 56,
-        height=ITEM_H * VISIBLE_ROWS,
-        highlightthickness=1,
-        highlightbackground="#cccccc",
-    )
-
-    scrollbar = tk.Scrollbar(frame, orient="vertical", command=canvas.yview)
-    canvas.configure(yscrollcommand=scrollbar.set)
-
-    canvas.pack(side="left", fill="both", expand=True)
-    scrollbar.pack(side="right", fill="y")
-
-    inner = tk.Frame(canvas, bg="white")
-    canvas_window = canvas.create_window((0, 0), window=inner, anchor="nw")
-
-    inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-    canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_window, width=e.width))
-
-    def _on_mousewheel(event):
-        delta = -1 * (event.delta // 120) if event.delta else (-1 if event.num == 4 else 1)
-        canvas.yview_scroll(delta, "units")
-
-    canvas.bind("<MouseWheel>", _on_mousewheel)
-    canvas.bind("<Button-4>", _on_mousewheel)
-    canvas.bind("<Button-5>", _on_mousewheel)
-
-    row_frames  = {}
-    icon_labels = {}
-
-    def _set_row_color(name, color):
-        rf = row_frames.get(name)
-        if rf and rf.winfo_exists():
-            rf.configure(bg=color)
-            for c in rf.winfo_children():
-                if c.winfo_exists():
-                    c.configure(bg=color)
-
-    def _select(name):
-        _set_row_color(selected_name[0], COLOR_NORMAL)
-        selected_name[0] = name
-        _set_row_color(name, COLOR_SELECTED)
-
-    # -------------------------------------------------
-    # SAFE EXIT
-    # -------------------------------------------------
-
-    def on_confirm():
-        running[0] = False
-        selected[0] = selected_name[0]
-        if root.winfo_exists():
-            root.destroy()
-
-    root.protocol("WM_DELETE_WINDOW", on_confirm)
-
-    # -------------------------------------------------
-    # rows
-    # -------------------------------------------------
-
-    for name in team_list:
-        rf = tk.Frame(inner, bg=COLOR_NORMAL, cursor="hand2")
-        rf.pack(fill="x")
-        row_frames[name] = rf
-
-        tk.Frame(rf, height=1, bg="#eeeeee").pack(fill="x", side="bottom")
-
-        icon = tk.Label(rf, image=placeholder, bg=COLOR_NORMAL, padx=6, pady=6)
-        icon.image = placeholder
-        icon.pack(side="left")
-        icon_labels[name] = icon
-
-        lbl = tk.Label(rf, text=name, font=("Helvetica", 11),
-                       bg=COLOR_NORMAL, anchor="w", pady=6)
-        lbl.pack(side="left", fill="x", expand=True)
-
-        for w in (rf, icon, lbl):
-            w.bind("<Button-1>", lambda e, n=name: _select(n))
-            w.bind("<Double-Button-1>", lambda e, n=name: (_select(n), on_confirm()))
-
-    _select(team_list[0])
-    root.bind("<Return>", lambda e: on_confirm())
-
-    # -------------------------------------------------
-    # THREAD → TK EVENT BRIDGE
-    # -------------------------------------------------
-
-    icon_queue = queue.Queue()
-    photo_refs = {}
-
-    def worker(name, url):
-        if not running[0]:
-            return
-        img = _fetch_logo_pil(url, size=(ICON_SIZE, ICON_SIZE)) if url else None
-        if running[0]:
-            icon_queue.put((name, img))
-            root.event_generate("<<IconReady>>", when="tail")
-
-    for name in team_list:
-        threading.Thread(
-            target=worker,
-            args=(name, logos.get(name)),
-            daemon=True,
-        ).start()
-
-    # -------------------------------------------------
-    # MAIN THREAD HANDLER (NO POLLING)
-    # -------------------------------------------------
-
-    def on_icon_ready(event=None):
-        while not icon_queue.empty():
-            name, pil_img = icon_queue.get()
-
-            if not running[0]:
-                return
-
-            if pil_img:
-                from PIL import ImageTk
-                photo = ImageTk.PhotoImage(pil_img)
-                photo_refs[name] = photo
-
-                lbl = icon_labels.get(name)
-                if lbl and lbl.winfo_exists():
-                    lbl.configure(image=photo)
-                    lbl.image = photo
-
-    root.bind("<<IconReady>>", on_icon_ready)
-
-    tk.Button(
-        root,
-        text="Analyse",
-        command=on_confirm,
-        font=("Helvetica", 10, "bold"),
-        bg="#1a73e8",
-        fg="white",
-        relief="flat",
-        padx=18,
-        pady=6,
-        cursor="hand2",
-    ).pack(pady=10)
-
-    root.mainloop()
-    return selected[0]
-
-
-# ----------------------------------------------------------------------
-# Entry point
-# ----------------------------------------------------------------------
-
-if __name__ == "__main__":
-    SEASONS = (2025, 2026)
-
-    analyzer = TeamAnalyzer()
-
-    print("Fetching team list from API...")
-    all_teams = analyzer.fetch_all_teams(seasons=(2026,))
-    print(f"{len(all_teams)} teams found.")
-
-    print("Fetching team logo URLs...")
-    logos = analyzer.fetch_competition_details()
-    print(f"{sum(1 for v in logos.values() if v)} logo URLs found.")
-
-    team_name = pick_team_gui(all_teams, logos=logos)
-
-    if not team_name:
-        print("No team selected. Exiting.")
-    else:
-        print(f"Selected: {team_name}")
-
-        analyzer.load_sample_data(seasons=SEASONS, team_name=team_name)
-
-        print(analyzer.generate_report(team_name, seasons=SEASONS))
-
-        logo_url = logos.get(team_name)
-        fig = analyzer.plot_performance_trends(team_name, seasons=SEASONS, logo_url=logo_url)
-        plt.show()
