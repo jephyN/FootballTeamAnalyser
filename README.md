@@ -1,4 +1,4 @@
-# FootballTeamAnalyser
+# Football Team Analyser
 
 A lightweight Python project for analysing football (soccer) team performance using **pandas** and visualising trends with **matplotlib**.
 
