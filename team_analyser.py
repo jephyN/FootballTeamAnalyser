@@ -1,6 +1,8 @@
 import json
 import os
+import warnings
 from datetime import datetime
+from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -10,6 +12,9 @@ import pandas as pd
 
 
 class TeamAnalyzer:
+    DEFAULT_COMPETITION = 'EPL'
+    DEFAULT_TEAM_KEY = 'ARS'
+
     def __init__(self):
         """Initialize the analyzer with empty data structures."""
         self.team_data = None
@@ -96,14 +101,24 @@ class TeamAnalyzer:
             'shots_on_target': TeamAnalyzer._pick_value(game, 'ShotsOnGoal', 'ShotsOnTarget'),
         }
 
-    def load_sample_data(self):
-        """Load match data from SportsData.io API, with fallback sample data."""
-        api_key = os.getenv('SPORTSDATA_API_KEY')
-        api_url = os.getenv('SPORTSDATA_MATCHES_URL')
+    @classmethod
+    def _default_api_url(cls):
+        return f"https://api.sportsdata.io/v4/soccer/scores/json/GamesByTeam/{cls.DEFAULT_COMPETITION}/{cls.DEFAULT_TEAM_KEY}"
 
-        if api_key and api_url:
-            self.load_match_data_from_api(api_url=api_url, api_key=api_key)
-        else:
+    def load_sample_data(self, api_key=None, api_url=None, team_name='Arsenal'):
+        """Load SportsData.io data when configured; otherwise use fallback data."""
+        resolved_api_key = api_key or os.getenv('SPORTSDATA_API_KEY')
+        resolved_api_url = api_url or os.getenv('SPORTSDATA_MATCHES_URL') or self._default_api_url()
+
+        if not resolved_api_key:
+            warnings.warn('SPORTSDATA_API_KEY is not configured. Using fallback sample data.', RuntimeWarning)
+            self.match_data = self._default_match_data()
+            return
+
+        try:
+            self.load_match_data_from_api(api_url=resolved_api_url, api_key=resolved_api_key, team_name=team_name)
+        except (URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+            warnings.warn(f'Failed to load SportsData.io data ({exc}). Using fallback sample data.', RuntimeWarning)
             self.match_data = self._default_match_data()
 
     def load_match_data_from_api(self, api_url, api_key, team_name='Arsenal'):
