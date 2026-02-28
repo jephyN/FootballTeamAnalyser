@@ -38,12 +38,19 @@ Install dependencies:
 pip install pandas numpy matplotlib
 ```
 
-Environment configuration:
+Environment configuration (either shell vars or `.env`):
 
 ```bash
 export SPORTSDATA_API_KEY="<your_sportsdata_key>"
 # Optional override; defaults to GamesByTeam/EPL/ARS
 export SPORTSDATA_MATCHES_URL="https://api.sportsdata.io/v4/soccer/scores/json/GamesByTeam/EPL/ARS"
+```
+
+Example `.env` file:
+
+```dotenv
+key=1527a55559834d689d6e2ad76e950fb4
+SPORTSDATA_API_KEY=1527a55559834d689d6e2ad76e950fb4
 ```
 
 ## Quick Start
@@ -82,7 +89,7 @@ plt.show()
 ## Core API
 
 ### `TeamAnalyzer.load_sample_data()`
-Loads Arsenal matches from SportsData.io when `SPORTSDATA_API_KEY` is configured. It uses `SPORTSDATA_MATCHES_URL` if provided, otherwise defaults to `https://api.sportsdata.io/v4/soccer/scores/json/GamesByTeam/EPL/ARS`. If API loading fails, it falls back to in-repo sample data.
+Loads Arsenal matches from SportsData.io when `SPORTSDATA_API_KEY` is configured (the loader also reads `.env` and supports `key` as a fallback variable name). It uses `SPORTSDATA_MATCHES_URL` if provided, otherwise defaults to `https://api.sportsdata.io/v4/soccer/scores/json/GamesByTeam/EPL/ARS`. If API loading fails, it falls back to in-repo sample data.
 
 ### `TeamAnalyzer.load_match_data_from_api(api_url, api_key, team_name="Arsenal")`
 Fetches and parses match data directly from a SportsData.io endpoint using `Ocp-Apim-Subscription-Key`. The parser handles common response field variants (for home/away team names, scores, and match date).

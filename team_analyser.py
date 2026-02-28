@@ -101,13 +101,33 @@ class TeamAnalyzer:
             'shots_on_target': TeamAnalyzer._pick_value(game, 'ShotsOnGoal', 'ShotsOnTarget'),
         }
 
+
+    @staticmethod
+    def _load_env_file(env_path='.env'):
+        """Load simple KEY=VALUE pairs from a local .env file into environment."""
+        if not os.path.exists(env_path):
+            return
+
+        with open(env_path, 'r', encoding='utf-8') as env_file:
+            for raw_line in env_file:
+                line = raw_line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+
     @classmethod
     def _default_api_url(cls):
         return f"https://api.sportsdata.io/v4/soccer/scores/json/GamesByTeam/{cls.DEFAULT_COMPETITION}/{cls.DEFAULT_TEAM_KEY}"
 
     def load_sample_data(self, api_key=None, api_url=None, team_name='Arsenal'):
         """Load SportsData.io data when configured; otherwise use fallback data."""
-        resolved_api_key = api_key or os.getenv('SPORTSDATA_API_KEY')
+        self._load_env_file()
+        resolved_api_key = api_key or os.getenv('SPORTSDATA_API_KEY') or os.getenv('key')
         resolved_api_url = api_url or os.getenv('SPORTSDATA_MATCHES_URL') or self._default_api_url()
 
         if not resolved_api_key:
