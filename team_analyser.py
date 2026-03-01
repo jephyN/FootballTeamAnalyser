@@ -1,5 +1,5 @@
 """
-team_analyzer.py
+team_analyser.py
 
 Handles data acquisition, payload normalisation, statistics calculation,
 and report/chart generation for football team season data.
@@ -20,15 +20,76 @@ import pandas as pd
 
 from logo_utils import _fetch_logo_pil
 
+_PV = "GoalkeeperCleanSheets", "DefenderCleanSheets", "CleanSheets"
+
+
+def _is_nan(value):
+    """Return True if value is None or a float NaN."""
+    return value is None or (isinstance(value, float) and np.isnan(value))
+
+
+def _build_season_row(team_stats, pick, team_name):
+    """Extract and return a normalised season-row dict from a raw stats dict."""
+    goals_scored = pick(team_stats, 'Score', 'Goals', 'GoalsScored', 'TeamGoals')
+    goals_conceded = pick(
+        team_stats, 'OpponentScore', 'OpponentGoals', 'GoalsAgainst', 'GoalsConceded'
+    )
+    possession = pick(team_stats, 'Possession', 'PossessionPct', 'PossessionPercentage')
+    shots = pick(team_stats, 'Shots', 'ShotsTotal', 'TeamShots')
+    shots_on_target = pick(team_stats, 'ShotsOnGoal', 'ShotsOnTarget')
+    matches_in_sample = pick(
+        team_stats, 'Games', 'GamesPlayed', 'Matches', 'MatchesPlayed'
+    )
+    clean_sheets = pick(team_stats, *_PV)
+    season = pick(team_stats, 'Season', 'SeasonYear')
+    season_year = pd.to_numeric(season, errors='coerce')
+    season_date = (
+        pd.to_datetime(f"{int(season_year)}-12-31", errors='coerce')
+        if not pd.isna(season_year) else pd.NaT
+    )
+    return {
+        'date': season_date,
+        'season_year': int(season_year) if not pd.isna(season_year) else np.nan,
+        'team': team_name,
+        'opponent': 'All Teams (Season Aggregate)',
+        'venue': 'Season',
+        'goals_scored': goals_scored,
+        'goals_conceded': goals_conceded,
+        'possession': possession,
+        'shots': shots,
+        'shots_on_target': shots_on_target,
+        'matches_in_sample': matches_in_sample,
+        'clean_sheets': clean_sheets,
+        'season_type': pick(team_stats, 'SeasonType'),
+        'team_id': pick(team_stats, 'TeamId'),
+    }
+
+
+def _annotate_line(ax, labels, values, fmt='.2f', suffix='%'):
+    """Annotate each point on a line chart with its formatted value."""
+    for lbl, val in zip(labels, values):
+        if not _is_nan(val):
+            ax.annotate(
+                f'{val:{fmt}}{suffix}', (lbl, val),
+                textcoords='offset points', xytext=(0, 8),
+                ha='center', fontsize=9,
+            )
+
 
 class TeamAnalyzer:
     """Handles data acquisition, normalization, analytics, and reporting."""
 
-    API_URL_TEMPLATE = 'https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/{season}'
-    DEFAULT_SEASONS = (2025, 2026)
-    DEFAULT_TEAM_NAME = 'Arsenal FC'
+    api_url_template = (
+        'https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/{season}'
+    )
+    competition_details_template = (
+        'https://api.sportsdata.io/v4/soccer/scores/json/CompetitionDetails/{competition_id}'
+    )
+    default_seasons = (2025, 2026)
+    default_team_name = 'Arsenal FC'
 
     def __init__(self):
+        """Initialise the analyser with empty data structures."""
         self.team_data = None
         self.match_data = None
 
@@ -38,7 +99,8 @@ class TeamAnalyzer:
 
     @staticmethod
     def _fmt(value, spec='.2f'):
-        if value is None or (isinstance(value, float) and np.isnan(value)):
+        """Format value using spec, returning 'N/A' for NaN/None."""
+        if _is_nan(value):
             return 'N/A'
         try:
             return format(value, spec)
@@ -51,6 +113,7 @@ class TeamAnalyzer:
 
     @staticmethod
     def _default_match_data(team_name='Arsenal FC'):
+        """Return synthetic fallback data for offline use."""
         return pd.DataFrame({
             'date': pd.to_datetime(['2025-12-31', '2026-12-31']),
             'season_year': [2025, 2026],
@@ -66,6 +129,7 @@ class TeamAnalyzer:
 
     @staticmethod
     def _fetch_json(url, headers=None, params=None):
+        """Fetch and return a parsed JSON payload from an HTTP endpoint."""
         if params:
             separator = '&' if '?' in url else '?'
             url = f"{url}{separator}{urlencode(params)}"
@@ -80,7 +144,8 @@ class TeamAnalyzer:
 
     @staticmethod
     def _normalize_team_season_payload(payload):
-        def _coerce_team_seasons(items, round_context=None):
+        """Normalise TeamSeasonStats/Round payloads to a flat row list."""
+        def _coerce(items, round_context=None):
             rows = []
             for item in items:
                 if not isinstance(item, dict):
@@ -111,18 +176,18 @@ class TeamAnalyzer:
             return rows
 
         if isinstance(payload, list):
-            return _coerce_team_seasons(payload)
+            return _coerce(payload)
         if isinstance(payload, dict):
             for key in ('TeamSeasonStats', 'teamSeasonStats', 'data', 'Data'):
                 value = payload.get(key)
                 if isinstance(value, list):
-                    return _coerce_team_seasons(value)
+                    return _coerce(value)
                 if isinstance(value, dict):
-                    return _coerce_team_seasons([value])
+                    return _coerce([value])
             for key in ('Rounds', 'rounds'):
                 rounds = payload.get(key)
                 if isinstance(rounds, list):
-                    return _coerce_team_seasons(rounds)
+                    return _coerce(rounds)
             if isinstance(payload.get('TeamSeasons'), list):
                 context = {
                     'Season': payload.get('Season'),
@@ -130,8 +195,8 @@ class TeamAnalyzer:
                     'RoundId': payload.get('RoundId'),
                     'RoundName': payload.get('Name'),
                 }
-                return _coerce_team_seasons(payload.get('TeamSeasons'), round_context=context)
-            return _coerce_team_seasons([payload])
+                return _coerce(payload['TeamSeasons'], round_context=context)
+            return _coerce([payload])
         return []
 
     # ------------------------------------------------------------------
@@ -140,6 +205,7 @@ class TeamAnalyzer:
 
     @staticmethod
     def _load_env_file(env_path='.env'):
+        """Load KEY=VALUE pairs from a .env file into the environment."""
         if not os.path.exists(env_path):
             return
         with open(env_path, 'r', encoding='utf-8') as env_file:
@@ -155,6 +221,7 @@ class TeamAnalyzer:
 
     @staticmethod
     def _extract_api_key_from_url(url):
+        """Strip the 'key' query param from a URL; return (clean_url, key)."""
         if not url:
             return url, None
         parsed = urlparse(url)
@@ -170,6 +237,7 @@ class TeamAnalyzer:
 
     @staticmethod
     def _pick_value(item, *keys):
+        """Return the first non-empty value for any of the candidate keys."""
         for key in keys:
             value = item.get(key)
             if value is not None and value != '':
@@ -178,44 +246,28 @@ class TeamAnalyzer:
 
     @staticmethod
     def _team_matches(row_team_name, requested_team_name):
+        """Case-insensitive exact match between two team name strings."""
         if pd.isna(row_team_name):
             return False
-        return str(row_team_name).strip().lower() == str(requested_team_name).strip().lower()
+        return (
+            str(row_team_name).strip().lower()
+            == str(requested_team_name).strip().lower()
+        )
 
     @staticmethod
     def _extract_team_season_row(team_stats, team_name='Arsenal FC'):
-        source_team = TeamAnalyzer._pick_value(team_stats, 'Name', 'TeamName', 'Team', 'TeamKey')
+        """Convert a raw TeamSeasonStats dict into a normalised row dict."""
+        source_team = TeamAnalyzer._pick_value(
+            team_stats, 'Name', 'TeamName', 'Team', 'TeamKey'
+        )
         if not TeamAnalyzer._team_matches(source_team, team_name):
             return None
-        season = TeamAnalyzer._pick_value(team_stats, 'Season', 'SeasonYear')
-        season_year = pd.to_numeric(season, errors='coerce')
-        season_date = (
-            pd.to_datetime(f"{int(season_year)}-12-31", errors='coerce')
-            if not pd.isna(season_year) else pd.NaT
-        )
-        clean_sheets = TeamAnalyzer._pick_value(
-            team_stats, 'GoalkeeperCleanSheets', 'DefenderCleanSheets', 'CleanSheets'
-        )
-        return {
-            'date': season_date,
-            'season_year': int(season_year) if not pd.isna(season_year) else np.nan,
-            'team': team_name,
-            'opponent': 'All Teams (Season Aggregate)',
-            'venue': 'Season',
-            'goals_scored': TeamAnalyzer._pick_value(team_stats, 'Score', 'Goals', 'GoalsScored', 'TeamGoals'),
-            'goals_conceded': TeamAnalyzer._pick_value(team_stats, 'OpponentScore', 'OpponentGoals', 'GoalsAgainst', 'GoalsConceded'),
-            'possession': TeamAnalyzer._pick_value(team_stats, 'Possession', 'PossessionPct', 'PossessionPercentage'),
-            'shots': TeamAnalyzer._pick_value(team_stats, 'Shots', 'ShotsTotal', 'TeamShots'),
-            'shots_on_target': TeamAnalyzer._pick_value(team_stats, 'ShotsOnGoal', 'ShotsOnTarget'),
-            'matches_in_sample': TeamAnalyzer._pick_value(team_stats, 'Games', 'GamesPlayed', 'Matches', 'MatchesPlayed'),
-            'clean_sheets': clean_sheets,
-            'season_type': TeamAnalyzer._pick_value(team_stats, 'SeasonType'),
-            'team_id': TeamAnalyzer._pick_value(team_stats, 'TeamId'),
-        }
+        return _build_season_row(team_stats, TeamAnalyzer._pick_value, team_name)
 
     @classmethod
     def _url_for_season(cls, season_year):
-        return cls.API_URL_TEMPLATE.format(season=season_year)
+        """Derive the TeamSeasonStats URL for a given season year."""
+        return cls.api_url_template.format(season=season_year)
 
     # ------------------------------------------------------------------
     # Raw data logging
@@ -223,6 +275,7 @@ class TeamAnalyzer:
 
     @staticmethod
     def _log_raw_api_data(season_year, raw_rows, team_name, log_path=None):
+        """Write raw API rows for a season to a timestamped JSON log file."""
         if log_path is None:
             safe_name = team_name.lower().replace(' ', '_')
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -239,7 +292,7 @@ class TeamAnalyzer:
         }
         TeamAnalyzer._log_buffer = existing
         log_path.write_text(
-            json.dumps({'arsenal_api_log': existing}, indent=2, default=str),
+            json.dumps({'api_log': existing}, indent=2, default=str),
             encoding='utf-8',
         )
 
@@ -247,7 +300,11 @@ class TeamAnalyzer:
     # Data loading
     # ------------------------------------------------------------------
 
-    def load_match_data_from_api(self, api_url, api_key, team_name=DEFAULT_TEAM_NAME):
+    def load_match_data_from_api(self, api_url, api_key, team_name=default_team_name):
+        """Fetch and parse TeamSeason rows for one season URL.
+
+        Returns a DataFrame. Does not modify self.match_data.
+        """
         cleaned_url, key_from_url = self._extract_api_key_from_url(api_url)
         resolved_api_key = api_key or key_from_url
         if not resolved_api_key:
@@ -257,7 +314,6 @@ class TeamAnalyzer:
             'Ocp-Apim-Subscription-Key': resolved_api_key,
         }
         payload = self._fetch_json(cleaned_url, headers=headers)
-        rows = []
         normalized = self._normalize_team_season_payload(payload)
         raw_team_rows = [
             item for item in normalized
@@ -267,42 +323,63 @@ class TeamAnalyzer:
                 team_name,
             )
         ]
-        for season_row in normalized:
-            row = self._extract_team_season_row(season_row, team_name=team_name)
-            if row:
-                rows.append(row)
+        rows = [
+            row for row in (
+                self._extract_team_season_row(r, team_name=team_name)
+                for r in normalized
+            )
+            if row
+        ]
         if not rows:
             raise ValueError(f'No {team_name} data parsed from: {cleaned_url}')
         season_year = rows[0].get('season_year', 'unknown')
         self._log_raw_api_data(season_year, raw_team_rows, team_name=team_name)
-        df = pd.DataFrame(rows)
+        data_frame = pd.DataFrame(rows)
         numeric_cols = [
             'goals_scored', 'goals_conceded', 'possession',
             'shots', 'shots_on_target', 'matches_in_sample', 'clean_sheets',
         ]
         for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-        return df
+            if col in data_frame.columns:
+                data_frame[col] = pd.to_numeric(data_frame[col], errors='coerce')
+        return data_frame
 
-    def load_sample_data(self, api_key=None, seasons=DEFAULT_SEASONS, team_name=DEFAULT_TEAM_NAME):
+    def load_sample_data(
+        self, api_key=None, seasons=default_seasons, team_name=default_team_name
+    ):
+        """Load data for each season and combine into self.match_data.
+
+        Seasons that fail are skipped with a warning. Falls back to
+        built-in sample data if all seasons fail or no key is configured.
+        """
         self._load_env_file()
         TeamAnalyzer._log_buffer = {}
         resolved_api_key = api_key or os.getenv('SPORTSDATA_API_KEY')
         if not resolved_api_key:
-            warnings.warn('SPORTSDATA_API_KEY is not configured. Using fallback sample data.', RuntimeWarning)
+            warnings.warn(
+                'SPORTSDATA_API_KEY is not configured. Using fallback sample data.',
+                RuntimeWarning,
+            )
             self.match_data = self._default_match_data(team_name=team_name)
             return
         season_frames = []
         for season_year in seasons:
             url = self._url_for_season(season_year)
             try:
-                df = self.load_match_data_from_api(api_url=url, api_key=resolved_api_key, team_name=team_name)
-                season_frames.append(df)
+                data_frame = self.load_match_data_from_api(
+                    api_url=url, api_key=resolved_api_key, team_name=team_name
+                )
+                season_frames.append(data_frame)
             except (URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
-                warnings.warn(f'Season {season_year}: failed to load ({exc}). Skipping.', RuntimeWarning)
+                warnings.warn(
+                    f'Season {season_year}: failed to load ({exc}). Skipping.',
+                    RuntimeWarning,
+                )
         if not season_frames:
-            warnings.warn('All seasons failed to load. Using fallback sample data.', RuntimeWarning)
+            warnings.warn(
+                'All seasons failed to load. Using fallback sample data.',
+                RuntimeWarning,
+            )
             self.match_data = self._default_match_data(team_name=team_name)
             return
         combined = pd.concat(season_frames, ignore_index=True)
@@ -313,6 +390,10 @@ class TeamAnalyzer:
     # ------------------------------------------------------------------
 
     def calculate_basic_stats(self, team_name, season_year=None):
+        """Return per-round average possession and shot accuracy for a team.
+
+        If season_year is given, only rows for that season are used.
+        """
         mask = self.match_data['team'] == team_name
         if season_year is not None and 'season_year' in self.match_data.columns:
             mask = mask & (self.match_data['season_year'] == season_year)
@@ -331,25 +412,29 @@ class TeamAnalyzer:
         else:
             shot_accuracy = np.nan
         return pd.Series({
-            'avg_possession': round(avg_possession, 2) if not pd.isna(avg_possession) else np.nan,
-            'shot_accuracy': round(shot_accuracy, 2) if not pd.isna(shot_accuracy) else np.nan,
+            'avg_possession': (
+                round(avg_possession, 2) if not pd.isna(avg_possession) else np.nan
+            ),
+            'shot_accuracy': (
+                round(shot_accuracy, 2) if not pd.isna(shot_accuracy) else np.nan
+            ),
         }, dtype='object')
 
     # ------------------------------------------------------------------
     # Competition / team discovery
     # ------------------------------------------------------------------
 
-    COMPETITION_DETAILS_TEMPLATE = (
-        'https://api.sportsdata.io/v4/soccer/scores/json/CompetitionDetails/{competition_id}'
-    )
-
     def fetch_competition_details(self, api_key=None, competition_id=3):
+        """Return a dict of {team_name: wikipedia_logo_url} for a competition."""
         self._load_env_file()
         resolved_api_key = api_key or os.getenv('SPORTSDATA_API_KEY')
         if not resolved_api_key:
-            warnings.warn('SPORTSDATA_API_KEY is not configured. Cannot fetch competition details.', RuntimeWarning)
+            warnings.warn(
+                'SPORTSDATA_API_KEY is not configured. Cannot fetch competition details.',
+                RuntimeWarning,
+            )
             return {}
-        url = self.COMPETITION_DETAILS_TEMPLATE.format(competition_id=competition_id)
+        url = self.competition_details_template.format(competition_id=competition_id)
         headers = {
             'Accept': 'application/json',
             'Ocp-Apim-Subscription-Key': resolved_api_key,
@@ -357,7 +442,10 @@ class TeamAnalyzer:
         try:
             payload = self._fetch_json(url, headers=headers)
         except (URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
-            warnings.warn(f'Failed to fetch competition details ({exc}). No logos will be shown.', RuntimeWarning)
+            warnings.warn(
+                f'Failed to fetch competition details ({exc}). No logos will be shown.',
+                RuntimeWarning,
+            )
             return {}
         logos = {}
         teams = payload.get('Teams') or payload.get('teams') or []
@@ -370,12 +458,19 @@ class TeamAnalyzer:
                 logos[str(name).strip()] = logo_url or None
         return logos
 
-    def fetch_all_teams(self, api_key=None, seasons=DEFAULT_SEASONS):
+    def fetch_all_teams(self, api_key=None, seasons=default_seasons):
+        """Return a sorted, deduplicated list of team names from the API.
+
+        Queries all seasons in `seasons`. Does not modify match_data.
+        """
         self._load_env_file()
         resolved_api_key = api_key or os.getenv('SPORTSDATA_API_KEY')
         if not resolved_api_key:
-            warnings.warn('SPORTSDATA_API_KEY is not configured. Returning fallback team list.', RuntimeWarning)
-            return [self.DEFAULT_TEAM_NAME]
+            warnings.warn(
+                'SPORTSDATA_API_KEY is not configured. Returning fallback team list.',
+                RuntimeWarning,
+            )
+            return [self.default_team_name]
         team_names = set()
         for season_year in seasons:
             url = self._url_for_season(season_year)
@@ -392,24 +487,34 @@ class TeamAnalyzer:
                     if not isinstance(item, dict):
                         continue
                     name = self._pick_value(item, 'Name', 'TeamName', 'Team', 'TeamKey')
-                    if not (name is None or (isinstance(name, float) and np.isnan(name))):
+                    if not _is_nan(name):
                         team_names.add(str(name).strip())
             except (URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
-                warnings.warn(f'Season {season_year}: could not fetch team list ({exc}). Skipping.', RuntimeWarning)
+                warnings.warn(
+                    f'Season {season_year}: could not fetch team list ({exc}). Skipping.',
+                    RuntimeWarning,
+                )
         if not team_names:
-            warnings.warn('No teams found from API. Returning fallback team list.', RuntimeWarning)
-            return [self.DEFAULT_TEAM_NAME]
+            warnings.warn(
+                'No teams found from API. Returning fallback team list.',
+                RuntimeWarning,
+            )
+            return [self.default_team_name]
         return sorted(team_names)
 
     # ------------------------------------------------------------------
     # Report
     # ------------------------------------------------------------------
 
-    def generate_report(self, team_name, seasons=DEFAULT_SEASONS):
+    def generate_report(self, team_name, seasons=default_seasons):
+        """Return a side-by-side text report of metrics across seasons."""
         season_stats = {}
         available_seasons = []
         for yr in seasons:
-            if 'season_year' in self.match_data.columns and yr not in self.match_data['season_year'].values:
+            if (
+                'season_year' in self.match_data.columns
+                and yr not in self.match_data['season_year'].values
+            ):
                 continue
             season_stats[yr] = self.calculate_basic_stats(team_name, season_year=yr)
             available_seasons.append(yr)
@@ -422,18 +527,16 @@ class TeamAnalyzer:
 
         def row(label, key, spec='.2f', suffix=''):
             values = ''
-            for yr in available_seasons:
-                raw = season_stats[yr].get(key, np.nan)
-                cell = self._fmt(raw, spec) + suffix if not (
-                    raw is None or (isinstance(raw, float) and np.isnan(raw))
-                ) else 'N/A'
+            for year in available_seasons:
+                raw = season_stats[year].get(key, np.nan)
+                cell = self._fmt(raw, spec) + suffix if not _is_nan(raw) else 'N/A'
                 values += cell.rjust(col_w)
             return f'{label:<{label_w}}{values}'
 
         lines = [
             f'\nPerformance Report — {team_name}',
             f'Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
-            f'(Values are averages per round across each season)',
+            '(Values are averages per round across each season)',
             '',
             f'{"Season":<{label_w}}{header_seasons}',
             separator,
@@ -448,37 +551,31 @@ class TeamAnalyzer:
     # Chart
     # ------------------------------------------------------------------
 
-    def plot_performance_trends(self, team_name, seasons=DEFAULT_SEASONS, logo_url=None):
+    def plot_performance_trends(self, team_name, seasons=default_seasons, logo_url=None):
+        """Return a matplotlib figure with possession and shot accuracy trends.
+
+        If logo_url is provided, the team logo is shown in the title area.
+        """
         available_seasons = []
         possession_vals = []
         shot_accuracy_vals = []
 
         for yr in seasons:
-            if 'season_year' in self.match_data.columns and yr not in self.match_data['season_year'].values:
+            if (
+                'season_year' in self.match_data.columns
+                and yr not in self.match_data['season_year'].values
+            ):
                 continue
-            s = self.calculate_basic_stats(team_name, season_year=yr)
+            stats = self.calculate_basic_stats(team_name, season_year=yr)
             available_seasons.append(yr)
-            possession_vals.append(s.get('avg_possession', np.nan))
-            shot_accuracy_vals.append(s.get('shot_accuracy', np.nan))
+            possession_vals.append(stats.get('avg_possession', np.nan))
+            shot_accuracy_vals.append(stats.get('shot_accuracy', np.nan))
 
         season_labels = [str(yr) for yr in available_seasons]
-
-        def _is_nan(v):
-            return v is None or (isinstance(v, float) and np.isnan(v))
-
-        def _annotate_line(ax, labels, values, fmt='.2f', suffix='%'):
-            for lbl, val in zip(labels, values):
-                if not _is_nan(val):
-                    ax.annotate(
-                        f'{val:{fmt}}{suffix}', (lbl, val),
-                        textcoords='offset points', xytext=(0, 8),
-                        ha='center', fontsize=9,
-                    )
-
         logo_img = _fetch_logo_pil(logo_url, size=(52, 52)) if logo_url else None
         has_logo = logo_img is not None
+        title_top = 0.86
 
-        TOP = 0.86
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
 
         has_possession = any(not _is_nan(v) for v in possession_vals)
@@ -511,10 +608,10 @@ class TeamAnalyzer:
         ax2.legend()
         ax2.grid(axis='y', linestyle='--', alpha=0.6)
 
-        plt.tight_layout(rect=[0, 0, 1, TOP])
+        plt.tight_layout(rect=[0, 0, 1, title_top])
 
         if has_logo:
-            logo_ax = fig.add_axes([0.01, TOP + 0.005, 0.08, 1.0 - TOP - 0.01])
+            logo_ax = fig.add_axes([0.01, title_top + 0.005, 0.08, 1.0 - title_top - 0.01])
             logo_ax.imshow(np.array(logo_img))
             logo_ax.axis('off')
             title_x = 0.54
@@ -524,8 +621,7 @@ class TeamAnalyzer:
         fig.suptitle(
             f'{team_name} — Season-by-Season Performance Metrics',
             fontsize=14, fontweight='bold',
-            y=(TOP + 1.0) / 2,
+            y=(title_top + 1.0) / 2,
             x=title_x,
         )
-
         return fig

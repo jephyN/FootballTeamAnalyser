@@ -21,6 +21,7 @@ SEASONS = (2025, 2026)
 
 
 def main():
+    """Run the full team selection and analysis workflow."""
     analyzer = TeamAnalyzer()
 
     print("Fetching team list from API...")
@@ -43,7 +44,7 @@ def main():
     print(analyzer.generate_report(team_name, seasons=SEASONS))
 
     logo_url = logos.get(team_name)
-    fig = analyzer.plot_performance_trends(team_name, seasons=SEASONS, logo_url=logo_url)
+    analyzer.plot_performance_trends(team_name, seasons=SEASONS, logo_url=logo_url)
     plt.show()
 
 
