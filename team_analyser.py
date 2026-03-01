@@ -22,6 +22,47 @@ from logo_utils import _fetch_logo_pil
 
 _PV = "GoalkeeperCleanSheets", "DefenderCleanSheets", "CleanSheets"
 
+_NUMERIC_COLS = [
+    'goals_scored', 'goals_conceded', 'possession',
+    'shots', 'shots_on_target', 'matches_in_sample', 'clean_sheets',
+]
+
+
+def _coerce_numeric_cols(data_frame):
+    """Coerce known numeric columns to float in-place."""
+    for col in _NUMERIC_COLS:
+        if col in data_frame.columns:
+            data_frame[col] = pd.to_numeric(data_frame[col], errors='coerce')
+
+
+def _build_api_headers(api_key):
+    """Return the standard SportsData.io request headers dict."""
+    return {'Accept': 'application/json', 'Ocp-Apim-Subscription-Key': api_key}
+
+
+def _collect_season_stats(analyzer, team_name, seasons):
+    """Return (available_seasons, possession_vals, shot_accuracy_vals) lists."""
+    available_seasons, possession_vals, shot_accuracy_vals = [], [], []
+    for yr in seasons:
+        if (
+            'season_year' in analyzer.match_data.columns
+            and yr not in analyzer.match_data['season_year'].values
+        ):
+            continue
+        stats = analyzer.calculate_basic_stats(team_name, season_year=yr)
+        available_seasons.append(yr)
+        possession_vals.append(stats.get('avg_possession', np.nan))
+        shot_accuracy_vals.append(stats.get('shot_accuracy', np.nan))
+    return available_seasons, possession_vals, shot_accuracy_vals
+
+
+def _add_chart_logo(fig, logo_img, title_top):
+    """Overlay the team logo in the header strip; return title x offset."""
+    logo_ax = fig.add_axes([0.01, title_top + 0.005, 0.08, 1.0 - title_top - 0.01])
+    logo_ax.imshow(np.array(logo_img))
+    logo_ax.axis('off')
+    return 0.54
+
 
 def _is_nan(value):
     """Return True if value is None or a float NaN."""
@@ -175,28 +216,31 @@ class TeamAnalyzer:
                     rows.append(merged)
             return rows
 
-        if isinstance(payload, list):
-            return _coerce(payload)
-        if isinstance(payload, dict):
+        def _coerce_dict(data):
             for key in ('TeamSeasonStats', 'teamSeasonStats', 'data', 'Data'):
-                value = payload.get(key)
+                value = data.get(key)
                 if isinstance(value, list):
                     return _coerce(value)
                 if isinstance(value, dict):
                     return _coerce([value])
             for key in ('Rounds', 'rounds'):
-                rounds = payload.get(key)
+                rounds = data.get(key)
                 if isinstance(rounds, list):
                     return _coerce(rounds)
-            if isinstance(payload.get('TeamSeasons'), list):
+            if isinstance(data.get('TeamSeasons'), list):
                 context = {
-                    'Season': payload.get('Season'),
-                    'SeasonType': payload.get('SeasonType'),
-                    'RoundId': payload.get('RoundId'),
-                    'RoundName': payload.get('Name'),
+                    'Season': data.get('Season'),
+                    'SeasonType': data.get('SeasonType'),
+                    'RoundId': data.get('RoundId'),
+                    'RoundName': data.get('Name'),
                 }
-                return _coerce(payload['TeamSeasons'], round_context=context)
-            return _coerce([payload])
+                return _coerce(data['TeamSeasons'], round_context=context)
+            return _coerce([data])
+
+        if isinstance(payload, list):
+            return _coerce(payload)
+        if isinstance(payload, dict):
+            return _coerce_dict(payload)
         return []
 
     # ------------------------------------------------------------------
@@ -309,10 +353,7 @@ class TeamAnalyzer:
         resolved_api_key = api_key or key_from_url
         if not resolved_api_key:
             raise ValueError('A SportsData.io API key is required.')
-        headers = {
-            'Accept': 'application/json',
-            'Ocp-Apim-Subscription-Key': resolved_api_key,
-        }
+        headers = _build_api_headers(resolved_api_key)
         payload = self._fetch_json(cleaned_url, headers=headers)
         normalized = self._normalize_team_season_payload(payload)
         raw_team_rows = [
@@ -335,13 +376,7 @@ class TeamAnalyzer:
         season_year = rows[0].get('season_year', 'unknown')
         self._log_raw_api_data(season_year, raw_team_rows, team_name=team_name)
         data_frame = pd.DataFrame(rows)
-        numeric_cols = [
-            'goals_scored', 'goals_conceded', 'possession',
-            'shots', 'shots_on_target', 'matches_in_sample', 'clean_sheets',
-        ]
-        for col in numeric_cols:
-            if col in data_frame.columns:
-                data_frame[col] = pd.to_numeric(data_frame[col], errors='coerce')
+        _coerce_numeric_cols(data_frame)
         return data_frame
 
     def load_sample_data(
@@ -476,10 +511,7 @@ class TeamAnalyzer:
             url = self._url_for_season(season_year)
             cleaned_url, key_from_url = self._extract_api_key_from_url(url)
             resolved_key = resolved_api_key or key_from_url
-            headers = {
-                'Accept': 'application/json',
-                'Ocp-Apim-Subscription-Key': resolved_key,
-            }
+            headers = _build_api_headers(resolved_key)
             try:
                 payload = self._fetch_json(cleaned_url, headers=headers)
                 rows = self._normalize_team_season_payload(payload)
@@ -556,21 +588,9 @@ class TeamAnalyzer:
 
         If logo_url is provided, the team logo is shown in the title area.
         """
-        available_seasons = []
-        possession_vals = []
-        shot_accuracy_vals = []
-
-        for yr in seasons:
-            if (
-                'season_year' in self.match_data.columns
-                and yr not in self.match_data['season_year'].values
-            ):
-                continue
-            stats = self.calculate_basic_stats(team_name, season_year=yr)
-            available_seasons.append(yr)
-            possession_vals.append(stats.get('avg_possession', np.nan))
-            shot_accuracy_vals.append(stats.get('shot_accuracy', np.nan))
-
+        available_seasons, possession_vals, shot_accuracy_vals = (
+            _collect_season_stats(self, team_name, seasons)
+        )
         season_labels = [str(yr) for yr in available_seasons]
         logo_img = _fetch_logo_pil(logo_url, size=(52, 52)) if logo_url else None
         has_logo = logo_img is not None
@@ -610,13 +630,7 @@ class TeamAnalyzer:
 
         plt.tight_layout(rect=[0, 0, 1, title_top])
 
-        if has_logo:
-            logo_ax = fig.add_axes([0.01, title_top + 0.005, 0.08, 1.0 - title_top - 0.01])
-            logo_ax.imshow(np.array(logo_img))
-            logo_ax.axis('off')
-            title_x = 0.54
-        else:
-            title_x = 0.5
+        title_x = _add_chart_logo(fig, logo_img, title_top) if has_logo else 0.5
 
         fig.suptitle(
             f'{team_name} — Season-by-Season Performance Metrics',
