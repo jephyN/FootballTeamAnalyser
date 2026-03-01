@@ -34,16 +34,21 @@ This project relies on the [SportsData.io](https://sportsdata.io) API. Access to
 ├── team_analyser.py    # TeamAnalyzer class — data loading, stats, report, chart
 ├── gui.py              # Team picker GUI (tkinter, background icon loading)
 ├── logo_utils.py       # Wikimedia logo URL resolution and PIL image fetching
+├── tests/
+│   ├── conftest.py          # sys.path setup for pytest
+│   ├── test_team_analyser.py
+│   └── test_logo_utils.py
+├── logs/               # Timestamped JSON log files (created automatically)
 ├── .env                # API credentials (not committed — see below)
 ├── Python.gitignore
 └── JetBrains.gitIgnore
 ```
 
-On each run, a timestamped JSON log file is created in the same directory:
+On each run, a timestamped JSON log file is created inside the `logs/` folder (created automatically if it doesn't exist). All seasons fetched in the same run are combined into a single file, organised by year:
 
 ```text
-<team_name_lowercase>_api_data_<YYYYMMDD_HHMMSS>.json
-# e.g. arsenal_fc_api_data_20260228_134500.json
+logs/<team_name_lowercase>_api_data_<YYYYMMDD_HHMMSS>.json
+# e.g. logs/arsenal_fc_api_data_20260228_134500.json
 ```
 
 ## Requirements
@@ -91,7 +96,7 @@ What happens on launch:
 4. Select a team and click **Analyse** (or double-click / press Enter).
 5. The performance report is printed to the console.
 6. A trend chart opens showing average possession and shot accuracy per round across **both** seasons (2025 and 2026), with the team logo displayed in the title area.
-7. A timestamped JSON log file is written to the project directory with all raw API data for the selected team.
+7. A timestamped JSON log file is written to the `logs/` folder with all raw API data for the selected team, organised by season year.
 
 ## Usage Example
 
@@ -129,7 +134,7 @@ Fetches the competition metadata endpoint and returns a `dict` of `{team_name: w
 ### `TeamAnalyzer.load_sample_data(api_key, seasons, team_name)`
 Fetches data for the given team across all seasons in `seasons`. Seasons that fail to load are skipped with a warning. If all seasons fail, falls back to built-in sample data.
 
-### `TeamAnalyzer.load_match_data_from_api(api_url, api_key, team_name)`
+### `TeamAnalyzer.load_match_data_from_api(api_url, api_key, team_name, log_path)`
 Fetches and parses `TeamSeason` rows for a single season URL. Returns a DataFrame without modifying `self.match_data`. Also writes raw API rows to the timestamped JSON log file.
 
 ### `TeamAnalyzer.calculate_basic_stats(team_name, season_year)`
@@ -172,7 +177,7 @@ Refer to the SportsData.io documentation for the list of competition IDs availab
 - All metrics are **per-round averages**, not season totals.
 - The dropdown and chart logos require **Pillow** (`pip install Pillow`). Without it, logos are silently skipped and grey placeholders are shown in the dropdown.
 - `pick_team_gui()` requires a display and will not run in a headless environment. In such cases, call `load_sample_data()` directly with a team name.
-- Each run produces a **new timestamped log file** rather than overwriting the previous one.
+- Each run produces a **new timestamped log file** inside the `logs/` folder rather than overwriting the previous one. Multiple seasons fetched in the same run are stored together in that file, keyed by year. The folder is created automatically on first run.
 
 ## License
 
