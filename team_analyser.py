@@ -323,7 +323,9 @@ class TeamAnalyzer:
         if log_path is None:
             safe_name = team_name.lower().replace(' ', '_')
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            log_path = Path(__file__).parent / f'{safe_name}_api_data_{timestamp}.json'
+            log_dir = Path(__file__).parent / 'logs'
+            log_dir.mkdir(exist_ok=True)
+            log_path = log_dir / f'{safe_name}_api_data_{timestamp}.json'
         else:
             log_path = Path(log_path)
         existing = getattr(TeamAnalyzer, '_log_buffer', {})
@@ -344,7 +346,9 @@ class TeamAnalyzer:
     # Data loading
     # ------------------------------------------------------------------
 
-    def load_match_data_from_api(self, api_url, api_key, team_name=default_team_name):
+    def load_match_data_from_api(
+        self, api_url, api_key, team_name=default_team_name, log_path=None
+    ):
         """Fetch and parse TeamSeason rows for one season URL.
 
         Returns a DataFrame. Does not modify self.match_data.
@@ -374,7 +378,7 @@ class TeamAnalyzer:
         if not rows:
             raise ValueError(f'No {team_name} data parsed from: {cleaned_url}')
         season_year = rows[0].get('season_year', 'unknown')
-        self._log_raw_api_data(season_year, raw_team_rows, team_name=team_name)
+        self._log_raw_api_data(season_year, raw_team_rows, team_name=team_name, log_path=log_path)
         data_frame = pd.DataFrame(rows)
         _coerce_numeric_cols(data_frame)
         return data_frame
@@ -397,12 +401,19 @@ class TeamAnalyzer:
             )
             self.match_data = self._default_match_data(team_name=team_name)
             return
+        safe_name = team_name.lower().replace(' ', '_')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_dir = Path(__file__).parent / 'logs'
+        log_dir.mkdir(exist_ok=True)
+        run_log_path = log_dir / f'{safe_name}_api_data_{timestamp}.json'
+
         season_frames = []
         for season_year in seasons:
             url = self._url_for_season(season_year)
             try:
                 data_frame = self.load_match_data_from_api(
-                    api_url=url, api_key=resolved_api_key, team_name=team_name
+                    api_url=url, api_key=resolved_api_key,
+                    team_name=team_name, log_path=run_log_path,
                 )
                 season_frames.append(data_frame)
             except (URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
