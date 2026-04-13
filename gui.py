@@ -121,6 +121,42 @@ def _start_icon_workers(root, team_list, logos, running, icon_queue):
         ).start()
 
 
+def _create_picker_window():
+    """Create and center the picker root window."""
+    root = tk.Tk()
+    root.title("Football Team Analyser — Select Team")
+    root.resizable(False, False)
+    root.update_idletasks()
+    offset_x = (root.winfo_screenwidth() // 2) - (_CFG.window_width // 2)
+    offset_y = (root.winfo_screenheight() // 2) - (_CFG.window_height // 2)
+    root.geometry(f"{_CFG.window_width}x{_CFG.window_height}+{offset_x}+{offset_y}")
+    root.configure(bg="#f5f5f5")
+    return root
+
+
+def _bind_team_row_clicks(row_frames, icon_labels, team_name, select_row, on_confirm):
+    """Bind single/double-click handlers for a team row and icon."""
+    widgets = row_frames[team_name].winfo_children() + [icon_labels[team_name]]
+    for widget in widgets:
+        widget.bind("<Button-1>", lambda e, n=team_name: select_row(n))
+        widget.bind("<Double-Button-1>", lambda e, n=team_name: (select_row(n), on_confirm()))
+
+
+def _drain_icon_queue(icon_queue, icon_labels, photo_refs, running):
+    """Drain queued logo images and apply them to row labels."""
+    while not icon_queue.empty():
+        name, pil_img = icon_queue.get()
+        if not running[0]:
+            return
+        if pil_img is not None:
+            photo = ImageTk.PhotoImage(pil_img)
+            photo_refs[name] = photo
+            lbl_widget = icon_labels.get(name)
+            if lbl_widget and lbl_widget.winfo_exists():
+                lbl_widget.configure(image=photo)
+                lbl_widget.image = photo
+
+
 def pick_team_gui(team_list, logos=None):
     """Open a tkinter window with a scrollable list of teams.
 
@@ -143,14 +179,7 @@ def pick_team_gui(team_list, logos=None):
     selected_name = [team_list[0]]
     running = [True]
 
-    root = tk.Tk()
-    root.title("Football Team Analyser — Select Team")
-    root.resizable(False, False)
-    root.update_idletasks()
-    offset_x = (root.winfo_screenwidth() // 2) - (_CFG.window_width // 2)
-    offset_y = (root.winfo_screenheight() // 2) - (_CFG.window_height // 2)
-    root.geometry(f"{_CFG.window_width}x{_CFG.window_height}+{offset_x}+{offset_y}")
-    root.configure(bg="#f5f5f5")
+    root = _create_picker_window()
 
     placeholder = _make_placeholder()
     tk.Label(root, text="Select a team:", font=("Helvetica", 11, "bold"),
@@ -183,13 +212,8 @@ def pick_team_gui(team_list, logos=None):
 
     root.protocol("WM_DELETE_WINDOW", on_confirm)
 
-    def _bind_row(team_name):
-        for widget in row_frames[team_name].winfo_children() + [icon_labels[team_name]]:
-            widget.bind("<Button-1>", lambda e, n=team_name: _select(n))
-            widget.bind("<Double-Button-1>", lambda e, n=team_name: (_select(n), on_confirm()))
-
     for name in team_list:
-        _bind_row(name)
+        _bind_team_row_clicks(row_frames, icon_labels, name, _select, on_confirm)
 
     _select(team_list[0])
     root.bind("<Return>", lambda e: on_confirm())
@@ -201,17 +225,7 @@ def pick_team_gui(team_list, logos=None):
 
     def _on_icon_ready(_event=None):
         """Drain the queue and apply any newly loaded icons."""
-        while not icon_queue.empty():
-            name, pil_img = icon_queue.get()
-            if not running[0]:
-                return
-            if pil_img is not None:
-                photo = ImageTk.PhotoImage(pil_img)
-                photo_refs[name] = photo
-                lbl_widget = icon_labels.get(name)
-                if lbl_widget and lbl_widget.winfo_exists():
-                    lbl_widget.configure(image=photo)
-                    lbl_widget.image = photo
+        _drain_icon_queue(icon_queue, icon_labels, photo_refs, running)
 
     root.bind("<<IconReady>>", _on_icon_ready)
 
