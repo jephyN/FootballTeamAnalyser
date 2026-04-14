@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from logo_utils import _fetch_logo_pil
-from analyzer_utils import is_nan
+from analyzer_payloads import is_nan
 
 
 def collect_season_stats(analyzer, team_name, seasons):

@@ -33,9 +33,16 @@ This project relies on the [SportsData.io](https://sportsdata.io) API. Access to
 .
 ├── main.py             # Entry point — orchestrates the startup sequence
 ├── team_analyser.py    # TeamAnalyzer public API (coordinates modules)
-├── analyzer_utils.py   # Data parsing/normalization utilities
-├── analyzer_plotting.py# Chart helpers
-├── possession_prediction.py # scikit-learn predictor + prediction UI window
+├── analyzer_http.py    # API/env/http helpers
+├── analyzer_payloads.py# Payload parsing/normalization helpers
+├── analyzer_logging.py # Raw API log writing
+├── analyzer_data_ops.py# Data loading/discovery operations
+├── analyzer_reporting.py # Stats/report formatting helpers
+├── analyzer_plotting.py # Chart helpers
+├── prediction_model.py  # scikit-learn (or numpy fallback) possession model
+├── prediction_window.py # Possession prediction result window
+├── possession_prediction.py # Public prediction API (facade)
+├── analyzer_utils.py   # Backward-compatible utility re-exports
 ├── gui.py              # Team picker GUI (tkinter, background icon loading)
 ├── logo_utils.py       # Wikimedia logo URL resolution and PIL image fetching
 ├── tests/
