@@ -137,6 +137,27 @@ def _build_possession_training_frame(team_possession):
     return pd.DataFrame(rows)
 
 
+def _plot_metric_axis(ax, labels, values, style):
+    """Plot one metric trend line or a no-data placeholder on the given axis."""
+    if any(not _is_nan(v) for v in values):
+        ax.plot(
+            labels, values, marker=style['marker'], color=style['color'],
+            linewidth=2, markersize=8, label=style['label'],
+        )
+        _annotate_line(ax, labels, values)
+        ax.set_title(style['title'])
+        ax.set_ylabel(style['ylabel'])
+        ax.set_ylim(0, 100)
+    else:
+        ax.text(
+            0.5, 0.5, style['no_data_msg'], ha='center',
+            va='center', transform=ax.transAxes,
+        )
+        ax.set_axis_off()
+    ax.legend()
+    ax.grid(axis='y', linestyle='--', alpha=0.6)
+
+
 class TeamAnalyzer:
     """Handles data acquisition, normalization, analytics, and reporting."""
 
@@ -708,35 +729,22 @@ class TeamAnalyzer:
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
 
-        has_possession = any(not _is_nan(v) for v in possession_vals)
-        if has_possession:
-            ax1.plot(season_labels, possession_vals, marker='o', color='green',
-                     linewidth=2, markersize=8, label='Avg Possession %')
-            _annotate_line(ax1, season_labels, possession_vals)
-            ax1.set_title('Average Possession % per Round')
-            ax1.set_ylabel('Possession (%)')
-            ax1.set_ylim(0, 100)
-        else:
-            ax1.text(0.5, 0.5, 'Possession data not available',
-                     ha='center', va='center', transform=ax1.transAxes)
-            ax1.set_axis_off()
-        ax1.legend()
-        ax1.grid(axis='y', linestyle='--', alpha=0.6)
-
-        has_accuracy = any(not _is_nan(v) for v in shot_accuracy_vals)
-        if has_accuracy:
-            ax2.plot(season_labels, shot_accuracy_vals, marker='s', color='darkorange',
-                     linewidth=2, markersize=8, label='Avg Shot Accuracy %')
-            _annotate_line(ax2, season_labels, shot_accuracy_vals)
-            ax2.set_title('Average Shot Accuracy % per Round')
-            ax2.set_ylabel('Shot Accuracy (%)')
-            ax2.set_ylim(0, 100)
-        else:
-            ax2.text(0.5, 0.5, 'Shot accuracy data not available',
-                     ha='center', va='center', transform=ax2.transAxes)
-            ax2.set_axis_off()
-        ax2.legend()
-        ax2.grid(axis='y', linestyle='--', alpha=0.6)
+        _plot_metric_axis(ax1, season_labels, possession_vals, {
+            'marker': 'o',
+            'color': 'green',
+            'label': 'Avg Possession %',
+            'title': 'Average Possession % per Round',
+            'ylabel': 'Possession (%)',
+            'no_data_msg': 'Possession data not available',
+        })
+        _plot_metric_axis(ax2, season_labels, shot_accuracy_vals, {
+            'marker': 's',
+            'color': 'darkorange',
+            'label': 'Avg Shot Accuracy %',
+            'title': 'Average Shot Accuracy % per Round',
+            'ylabel': 'Shot Accuracy (%)',
+            'no_data_msg': 'Shot accuracy data not available',
+        })
 
         plt.tight_layout(rect=[0, 0, 1, title_top])
 
