@@ -639,19 +639,11 @@ class TeamAnalyzer:
             return [self.default_team_name]
         team_names = set()
         for season_year in seasons:
-            url = self._url_for_season(season_year)
-            cleaned_url, key_from_url = self._extract_api_key_from_url(url)
-            resolved_key = resolved_api_key or key_from_url
-            headers = _build_api_headers(resolved_key)
             try:
-                payload = self._fetch_json(cleaned_url, headers=headers)
-                rows = self._normalize_team_season_payload(payload)
-                for item in rows:
-                    if not isinstance(item, dict):
-                        continue
-                    name = self._pick_value(item, 'Name', 'TeamName', 'Team', 'TeamKey')
-                    if not _is_nan(name):
-                        team_names.add(str(name).strip())
+                season_names = self._fetch_team_names_for_season(
+                    season_year, resolved_api_key
+                )
+                team_names.update(season_names)
             except (URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
                 warnings.warn(
                     f'Season {season_year}: could not fetch team list ({exc}). Skipping.',
@@ -664,6 +656,22 @@ class TeamAnalyzer:
             )
             return [self.default_team_name]
         return sorted(team_names)
+
+    def _fetch_team_names_for_season(self, season_year, api_key):
+        """Fetch and return team names for a specific season year."""
+        url = self._url_for_season(season_year)
+        cleaned_url, key_from_url = self._extract_api_key_from_url(url)
+        headers = _build_api_headers(api_key or key_from_url)
+        payload = self._fetch_json(cleaned_url, headers=headers)
+        rows = self._normalize_team_season_payload(payload)
+        team_names = set()
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            name = self._pick_value(item, 'Name', 'TeamName', 'Team', 'TeamKey')
+            if not _is_nan(name):
+                team_names.add(str(name).strip())
+        return team_names
 
     # ------------------------------------------------------------------
     # Report
