@@ -16,6 +16,14 @@ import matplotlib.pyplot as plt
 
 from team_analyser import TeamAnalyzer
 from gui import pick_team_gui
+from app_strings import (
+    MSG_FETCH_TEAM_LIST,
+    MSG_TEAMS_FOUND,
+    MSG_FETCH_LOGOS,
+    MSG_LOGOS_FOUND,
+    MSG_NO_TEAM_SELECTED,
+    MSG_SELECTED_TEAM,
+)
 
 SEASONS = (2025, 2026)
 
@@ -24,21 +32,21 @@ def main():
     """Run the full team selection and analysis workflow."""
     analyzer = TeamAnalyzer()
 
-    print("Fetching team list from API...")
+    print(MSG_FETCH_TEAM_LIST)
     all_teams = analyzer.fetch_all_teams(seasons=(2026,))
-    print(f"{len(all_teams)} teams found.")
+    print(MSG_TEAMS_FOUND.format(count=len(all_teams)))
 
-    print("Fetching team logo URLs...")
+    print(MSG_FETCH_LOGOS)
     logos = analyzer.fetch_competition_details()
-    print(f"{sum(1 for v in logos.values() if v)} logo URLs found.")
+    print(MSG_LOGOS_FOUND.format(count=sum(1 for v in logos.values() if v)))
 
     team_name = pick_team_gui(all_teams, logos=logos)
 
     if not team_name:
-        print("No team selected. Exiting.")
+        print(MSG_NO_TEAM_SELECTED)
         return
 
-    print(f"Selected: {team_name}")
+    print(MSG_SELECTED_TEAM.format(team_name=team_name))
 
     analyzer.load_sample_data(seasons=SEASONS, team_name=team_name)
     print(analyzer.generate_report(team_name, seasons=SEASONS))
