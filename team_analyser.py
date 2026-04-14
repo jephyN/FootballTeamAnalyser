@@ -117,6 +117,26 @@ def _annotate_line(ax, labels, values, fmt='.2f', suffix='%'):
             )
 
 
+def _plot_metric_axis(ax, labels, values, style):
+    """Plot one metric trend line or a no-data placeholder on the given axis."""
+    if any(not _is_nan(v) for v in values):
+        ax.plot(
+            labels, values, marker=style['marker'], color=style['color'],
+            linewidth=2, markersize=8, label=style['label'],
+        )
+        _annotate_line(ax, labels, values)
+        ax.set_title(style['title'])
+        ax.set_ylabel(style['ylabel'])
+        ax.set_ylim(0, 100)
+    else:
+        ax.text(
+            0.5, 0.5, style['no_data_msg'], ha='center', va='center', transform=ax.transAxes
+        )
+        ax.set_axis_off()
+    ax.legend()
+    ax.grid(axis='y', linestyle='--', alpha=0.6)
+
+
 class TeamAnalyzer:
     """Handles data acquisition, normalization, analytics, and reporting."""
 
@@ -519,19 +539,11 @@ class TeamAnalyzer:
             return [self.default_team_name]
         team_names = set()
         for season_year in seasons:
-            url = self._url_for_season(season_year)
-            cleaned_url, key_from_url = self._extract_api_key_from_url(url)
-            resolved_key = resolved_api_key or key_from_url
-            headers = _build_api_headers(resolved_key)
             try:
-                payload = self._fetch_json(cleaned_url, headers=headers)
-                rows = self._normalize_team_season_payload(payload)
-                for item in rows:
-                    if not isinstance(item, dict):
-                        continue
-                    name = self._pick_value(item, 'Name', 'TeamName', 'Team', 'TeamKey')
-                    if not _is_nan(name):
-                        team_names.add(str(name).strip())
+                season_names = self._fetch_team_names_for_season(
+                    season_year, resolved_api_key
+                )
+                team_names.update(season_names)
             except (URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
                 warnings.warn(
                     f'Season {season_year}: could not fetch team list ({exc}). Skipping.',
@@ -544,6 +556,22 @@ class TeamAnalyzer:
             )
             return [self.default_team_name]
         return sorted(team_names)
+
+    def _fetch_team_names_for_season(self, season_year, api_key):
+        """Fetch and return team names for a specific season year."""
+        url = self._url_for_season(season_year)
+        cleaned_url, key_from_url = self._extract_api_key_from_url(url)
+        headers = _build_api_headers(api_key or key_from_url)
+        payload = self._fetch_json(cleaned_url, headers=headers)
+        rows = self._normalize_team_season_payload(payload)
+        team_names = set()
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            name = self._pick_value(item, 'Name', 'TeamName', 'Team', 'TeamKey')
+            if not _is_nan(name):
+                team_names.add(str(name).strip())
+        return team_names
 
     # ------------------------------------------------------------------
     # Report
@@ -609,35 +637,26 @@ class TeamAnalyzer:
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
 
-        has_possession = any(not _is_nan(v) for v in possession_vals)
-        if has_possession:
-            ax1.plot(season_labels, possession_vals, marker='o', color='green',
-                     linewidth=2, markersize=8, label='Avg Possession %')
-            _annotate_line(ax1, season_labels, possession_vals)
-            ax1.set_title('Average Possession % per Round')
-            ax1.set_ylabel('Possession (%)')
-            ax1.set_ylim(0, 100)
-        else:
-            ax1.text(0.5, 0.5, 'Possession data not available',
-                     ha='center', va='center', transform=ax1.transAxes)
-            ax1.set_axis_off()
-        ax1.legend()
-        ax1.grid(axis='y', linestyle='--', alpha=0.6)
-
-        has_accuracy = any(not _is_nan(v) for v in shot_accuracy_vals)
-        if has_accuracy:
-            ax2.plot(season_labels, shot_accuracy_vals, marker='s', color='darkorange',
-                     linewidth=2, markersize=8, label='Avg Shot Accuracy %')
-            _annotate_line(ax2, season_labels, shot_accuracy_vals)
-            ax2.set_title('Average Shot Accuracy % per Round')
-            ax2.set_ylabel('Shot Accuracy (%)')
-            ax2.set_ylim(0, 100)
-        else:
-            ax2.text(0.5, 0.5, 'Shot accuracy data not available',
-                     ha='center', va='center', transform=ax2.transAxes)
-            ax2.set_axis_off()
-        ax2.legend()
-        ax2.grid(axis='y', linestyle='--', alpha=0.6)
+        _plot_metric_axis(
+            ax1, season_labels, possession_vals, {
+                'marker': 'o',
+                'color': 'green',
+                'label': 'Avg Possession %',
+                'title': 'Average Possession % per Round',
+                'ylabel': 'Possession (%)',
+                'no_data_msg': 'Possession data not available',
+            }
+        )
+        _plot_metric_axis(
+            ax2, season_labels, shot_accuracy_vals, {
+                'marker': 's',
+                'color': 'darkorange',
+                'label': 'Avg Shot Accuracy %',
+                'title': 'Average Shot Accuracy % per Round',
+                'ylabel': 'Shot Accuracy (%)',
+                'no_data_msg': 'Shot accuracy data not available',
+            }
+        )
 
         plt.tight_layout(rect=[0, 0, 1, title_top])
 
