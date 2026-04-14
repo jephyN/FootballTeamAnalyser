@@ -1,31 +1,63 @@
-"""
-main.py
+"""Entry point for the Football Team Analyser."""
 
-Entry point for the Football Team Analyser.
-
-Orchestrates the startup sequence:
-  1. Fetch team list for the dropdown (2026 season only)
-  2. Fetch logo URLs for all teams in the competition
-  3. Show the team picker GUI
-  4. Load season data for the selected team (2025 + 2026)
-  5. Print the performance report
-  6. Display the trend chart
-"""
+import tkinter as tk
 
 import matplotlib.pyplot as plt
 
-from team_analyser import TeamAnalyzer
-from gui import pick_team_gui
 from app_strings import (
-    MSG_FETCH_TEAM_LIST,
-    MSG_TEAMS_FOUND,
     MSG_FETCH_LOGOS,
+    MSG_FETCH_TEAM_LIST,
     MSG_LOGOS_FOUND,
     MSG_NO_TEAM_SELECTED,
     MSG_SELECTED_TEAM,
+    MSG_TEAMS_FOUND,
 )
+from gui import pick_team_gui
+from possession_prediction import open_possession_prediction_window
+from team_analyser import TeamAnalyzer
 
 SEASONS = (2025, 2026)
+
+
+def _show_possession_prediction_launcher(analyzer, team_name, all_teams):
+    """Show a small window with a button to open possession predictions."""
+
+    def _open_window():
+        opponents = [name for name in all_teams if name != team_name]
+        predictions = analyzer.predict_possession_vs_opponents(
+            team_name=team_name,
+            opponents=opponents,
+            seasons=SEASONS,
+        )
+        open_possession_prediction_window(team_name, predictions)
+
+    root = tk.Tk()
+    root.title('Advanced Predictions')
+    root.geometry('360x140')
+    root.configure(bg='#f5f5f5')
+
+    tk.Label(
+        root,
+        text='Predict possession vs possible opponents',
+        font=('Helvetica', 11, 'bold'),
+        bg='#f5f5f5',
+    ).pack(pady=(20, 10))
+
+    tk.Button(
+        root,
+        text='Open Possession Predictor',
+        command=_open_window,
+        font=('Helvetica', 10, 'bold'),
+        bg='#1a73e8',
+        fg='white',
+        relief='flat',
+        padx=18,
+        pady=6,
+        cursor='hand2',
+    ).pack()
+
+    tk.Button(root, text='Close', command=root.destroy).pack(pady=(10, 0))
+    root.mainloop()
 
 
 def main():
@@ -50,6 +82,8 @@ def main():
 
     analyzer.load_sample_data(seasons=SEASONS, team_name=team_name)
     print(analyzer.generate_report(team_name, seasons=SEASONS))
+
+    _show_possession_prediction_launcher(analyzer, team_name, all_teams)
 
     logo_url = logos.get(team_name)
     analyzer.plot_performance_trends(team_name, seasons=SEASONS, logo_url=logo_url)
