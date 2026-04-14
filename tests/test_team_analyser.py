@@ -10,6 +10,7 @@ All tests are fully offline — no network calls are made. API methods are
 tested by patching TeamAnalyzer._fetch_json so the real urlopen is never
 called.
 """
+# pylint: disable=too-many-lines
 
 import json
 import os
