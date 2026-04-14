@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from PIL import ImageTk
 
 from logo_utils import _fetch_logo_pil
+from app_strings import TEAM_PROMPT, WINDOW_TITLE
 
 
 @dataclass(frozen=True)
@@ -124,7 +125,7 @@ def _start_icon_workers(root, team_list, logos, state, icon_queue):
 def _create_picker_window():
     """Create and center the picker root window."""
     root = tk.Tk()
-    root.title("Football Team Analyser — Select Team")
+    root.title(WINDOW_TITLE)
     root.resizable(False, False)
     root.update_idletasks()
     offset_x = (root.winfo_screenwidth() // 2) - (_CFG.window_width // 2)
@@ -212,7 +213,7 @@ def pick_team_gui(team_list, logos=None):
     root = _create_picker_window()
 
     placeholder = _make_placeholder()
-    tk.Label(root, text="Select a team:", font=("Helvetica", 11, "bold"),
+    tk.Label(root, text=TEAM_PROMPT, font=("Helvetica", 11, "bold"),
              bg="#f5f5f5").pack(pady=(12, 6))
 
     scroll_frame = tk.Frame(root, bg="#f5f5f5")
