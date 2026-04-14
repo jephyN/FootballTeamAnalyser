@@ -27,6 +27,7 @@ from PIL import Image
 from team_analyser import (
     TeamAnalyzer,
     _build_api_headers,
+    _build_possession_training_frame,
     _build_season_row,
     _coerce_numeric_cols,
     _is_nan,
@@ -569,6 +570,72 @@ class TestCalculateBasicStats:
         assert arsenal['avg_possession'] != chelsea['avg_possession']
         assert arsenal['avg_possession'] == pytest.approx(60.0)
         assert chelsea['avg_possession'] == pytest.approx(50.0)
+# pylint: enable=redefined-outer-name
+
+
+# ---------------------------------------------------------------------------
+# _build_possession_training_frame
+# ---------------------------------------------------------------------------
+
+class TestBuildPossessionTrainingFrame:
+    """Tests for the pairwise possession training-data helper."""
+
+    def test_builds_pairwise_rows(self):
+        """Two teams produce two directed pairwise rows."""
+        frame = _build_possession_training_frame({'A': 60.0, 'B': 40.0})
+        assert len(frame) == 2
+        assert set(frame.columns) == {
+            'team_possession', 'opponent_possession',
+            'possession_gap', 'target_possession',
+        }
+
+    def test_target_is_percentage_share(self):
+        """Target possession is computed as team/(team+opponent)*100."""
+        frame = _build_possession_training_frame({'A': 60.0, 'B': 40.0})
+        row = frame.iloc[0]
+        expected = row['team_possession'] / (
+            row['team_possession'] + row['opponent_possession']
+        ) * 100.0
+        assert row['target_possession'] == pytest.approx(expected)
+
+
+# ---------------------------------------------------------------------------
+# TeamAnalyzer.predict_next_rounds_possession
+# ---------------------------------------------------------------------------
+
+# pylint: disable=redefined-outer-name
+class TestPredictNextRoundsPossession:
+    """Tests for TeamAnalyzer.predict_next_rounds_possession."""
+
+    @pytest.fixture(autouse=True)
+    def _requires_sklearn(self):
+        """Skip this suite when scikit-learn is not installed."""
+        pytest.importorskip('sklearn')
+
+    def test_returns_predictions_for_each_opponent(self, two_team_analyzer):
+        """One row is returned per requested opponent."""
+        result = two_team_analyzer.predict_next_rounds_possession(
+            'Arsenal FC', ['Chelsea FC']
+        )
+        assert len(result) == 1
+        assert result.iloc[0]['opponent'] == 'Chelsea FC'
+
+    def test_predicted_split_sums_to_100(self, two_team_analyzer):
+        """Predicted team and opponent possession always sum to 100%."""
+        result = two_team_analyzer.predict_next_rounds_possession(
+            'Arsenal FC', ['Chelsea FC']
+        )
+        row = result.iloc[0]
+        assert (
+            row['predicted_team_possession'] + row['predicted_opponent_possession']
+        ) == pytest.approx(100.0)
+
+    def test_unknown_team_raises(self, two_team_analyzer):
+        """A missing team in the dataset raises a ValueError."""
+        with pytest.raises(ValueError, match='not found'):
+            two_team_analyzer.predict_next_rounds_possession(
+                'Unknown FC', ['Chelsea FC']
+            )
 # pylint: enable=redefined-outer-name
 
 

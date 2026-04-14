@@ -117,6 +117,26 @@ def _annotate_line(ax, labels, values, fmt='.2f', suffix='%'):
             )
 
 
+def _build_possession_training_frame(team_possession):
+    """Build pairwise training rows from per-team average possession values."""
+    teams = list(team_possession.items())
+    rows = []
+    for team_a, pos_a in teams:
+        for team_b, pos_b in teams:
+            if team_a == team_b:
+                continue
+            total = pos_a + pos_b
+            if total <= 0:
+                continue
+            rows.append({
+                'team_possession': pos_a,
+                'opponent_possession': pos_b,
+                'possession_gap': pos_a - pos_b,
+                'target_possession': (pos_a / total) * 100.0,
+            })
+    return pd.DataFrame(rows)
+
+
 class TeamAnalyzer:
     """Handles data acquisition, normalization, analytics, and reporting."""
 
@@ -465,6 +485,77 @@ class TeamAnalyzer:
                 round(shot_accuracy, 2) if not pd.isna(shot_accuracy) else np.nan
             ),
         }, dtype='object')
+
+    def predict_next_rounds_possession(self, team_name, opponents, season_year=None):
+        """Predict possession split vs each opponent using a sklearn regressor.
+
+        Returns a DataFrame with one row per opponent and columns:
+        team, opponent, predicted_team_possession, predicted_opponent_possession.
+        """
+        if self.match_data is None or self.match_data.empty:
+            raise ValueError('No match data loaded. Call load_sample_data() first.')
+        if not opponents:
+            raise ValueError('At least one opponent must be provided.')
+        if 'possession' not in self.match_data.columns:
+            raise ValueError("match_data is missing required column: 'possession'.")
+        try:
+            from sklearn.linear_model import LinearRegression
+        except ImportError as exc:
+            raise ImportError(
+                'scikit-learn is required for possession prediction. '
+                'Install it with: pip install scikit-learn'
+            ) from exc
+
+        data_frame = self.match_data.copy()
+        if season_year is not None and 'season_year' in data_frame.columns:
+            data_frame = data_frame[data_frame['season_year'] == season_year]
+        if data_frame.empty:
+            raise ValueError(f'No data available for season {season_year}.')
+
+        team_possession = (
+            data_frame.groupby('team', as_index=True)['possession']
+            .mean()
+            .dropna()
+            .to_dict()
+        )
+        if team_name not in team_possession:
+            raise ValueError(f'{team_name} not found in available possession data.')
+
+        training_frame = _build_possession_training_frame(team_possession)
+        if training_frame.empty:
+            raise ValueError('Insufficient data to train possession prediction model.')
+
+        features = training_frame[
+            ['team_possession', 'opponent_possession', 'possession_gap']
+        ]
+        target = training_frame['target_possession']
+        model = LinearRegression()
+        model.fit(features, target)
+
+        team_avg_possession = team_possession[team_name]
+        predictions = []
+        for opponent in opponents:
+            if opponent not in team_possession:
+                raise ValueError(
+                    f'{opponent} not found in available possession data.'
+                )
+            opponent_avg_possession = team_possession[opponent]
+            model_features = pd.DataFrame([{
+                'team_possession': team_avg_possession,
+                'opponent_possession': opponent_avg_possession,
+                'possession_gap': team_avg_possession - opponent_avg_possession,
+            }])
+            raw_prediction = float(model.predict(model_features)[0])
+            team_prediction = float(np.clip(raw_prediction, 0.0, 100.0))
+            opponent_prediction = 100.0 - team_prediction
+            predictions.append({
+                'team': team_name,
+                'opponent': opponent,
+                'predicted_team_possession': round(team_prediction, 2),
+                'predicted_opponent_possession': round(opponent_prediction, 2),
+            })
+
+        return pd.DataFrame(predictions)
 
     # ------------------------------------------------------------------
     # Competition / team discovery

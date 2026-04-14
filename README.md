@@ -57,13 +57,14 @@ logs/<team_name_lowercase>_api_data_<YYYYMMDD_HHMMSS>.json
 - pandas
 - numpy
 - matplotlib
+- scikit-learn *(for possession prediction vs upcoming opponents)*
 - Pillow *(for team logos in the dropdown and chart)*
 - tkinter *(included in the Python standard library — no separate install needed)*
 
 Install third-party dependencies:
 
 ```bash
-pip install pandas numpy matplotlib Pillow
+pip install pandas numpy matplotlib scikit-learn Pillow
 ```
 
 ## Environment Configuration
@@ -142,6 +143,9 @@ Returns a `pandas.Series` with `avg_possession` and `shot_accuracy` for the give
 
 ### `TeamAnalyzer.generate_report(team_name, seasons)`
 Returns a side-by-side columnar text report comparing `avg_possession` and `shot_accuracy` across all seasons in `seasons`.
+
+### `TeamAnalyzer.predict_next_rounds_possession(team_name, opponents, season_year)`
+Predicts possession split for upcoming opponents using a scikit-learn linear-regression model trained on historical team possession values. Returns a DataFrame with both values constrained to a full split: `team % + opponent % = 100 %`.
 
 ### `TeamAnalyzer.plot_performance_trends(team_name, seasons, logo_url)`
 Returns a matplotlib figure with two line charts — average possession % and average shot accuracy % — one data point per season. If `logo_url` is provided, the team logo is displayed in the top-left of the chart title area.
