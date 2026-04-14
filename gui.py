@@ -37,10 +37,14 @@ class _GuiConfig:
 
 
 _CFG = _GuiConfig()
-_STATE_SELECTED = "selected"
-_STATE_SELECTED_NAME = "selected_name"
-_STATE_RUNNING = "running"
 _EVENT_ICON_READY = "<<IconReady>>"
+
+
+@dataclass
+class _PickerState:
+    selected: str | None
+    selected_name: str
+    running: bool = True
 
 
 def _make_placeholder():
@@ -112,10 +116,10 @@ def _build_team_rows(inner, team_list, placeholder):
 def _start_icon_workers(root, team_list, logos, state, icon_queue):
     """Spawn one daemon thread per team to fetch logo images."""
     def _worker(team_name, url):
-        if not state[_STATE_RUNNING]:
+        if not state.running:
             return
         img = _fetch_logo_pil(url, size=(_CFG.icon_size, _CFG.icon_size)) if url else None
-        if state[_STATE_RUNNING]:
+        if state.running:
             icon_queue.put((team_name, img))
             root.event_generate(_EVENT_ICON_READY, when="tail")
 
@@ -150,7 +154,7 @@ def _drain_icon_queue(icon_queue, icon_labels, photo_refs, state):
     """Drain queued logo images and apply them to row labels."""
     while not icon_queue.empty():
         name, pil_img = icon_queue.get()
-        if not state[_STATE_RUNNING]:
+        if not state.running:
             return
         if pil_img is not None:
             photo = ImageTk.PhotoImage(pil_img)
@@ -172,13 +176,13 @@ def _build_selection_handlers(root, row_frames, state):
                     child.configure(bg=color)
 
     def _select(team_name):
-        _set_row_color(state[_STATE_SELECTED_NAME], _CFG.color_normal)
-        state[_STATE_SELECTED_NAME] = team_name
+        _set_row_color(state.selected_name, _CFG.color_normal)
+        state.selected_name = team_name
         _set_row_color(team_name, _CFG.color_selected)
 
     def _on_confirm():
-        state[_STATE_RUNNING] = False
-        state[_STATE_SELECTED] = state[_STATE_SELECTED_NAME]
+        state.running = False
+        state.selected = state.selected_name
         if root.winfo_exists():
             root.destroy()
 
@@ -211,11 +215,7 @@ def pick_team_gui(team_list, logos=None):
     if logos is None:
         logos = {}
 
-    state = {
-        _STATE_SELECTED: None,
-        _STATE_SELECTED_NAME: team_list[0],
-        _STATE_RUNNING: True,
-    }
+    state = _PickerState(selected=None, selected_name=team_list[0])
 
     root = _create_picker_window()
 
@@ -252,4 +252,4 @@ def pick_team_gui(team_list, logos=None):
     ).pack(pady=10)
 
     root.mainloop()
-    return state[_STATE_SELECTED]
+    return state.selected
