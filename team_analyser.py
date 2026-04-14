@@ -498,13 +498,6 @@ class TeamAnalyzer:
             raise ValueError('At least one opponent must be provided.')
         if 'possession' not in self.match_data.columns:
             raise ValueError("match_data is missing required column: 'possession'.")
-        try:
-            from sklearn.linear_model import LinearRegression
-        except ImportError as exc:
-            raise ImportError(
-                'scikit-learn is required for possession prediction. '
-                'Install it with: pip install scikit-learn'
-            ) from exc
 
         data_frame = self.match_data.copy()
         if season_year is not None and 'season_year' in data_frame.columns:
@@ -520,32 +513,47 @@ class TeamAnalyzer:
         )
         if team_name not in team_possession:
             raise ValueError(f'{team_name} not found in available possession data.')
+        missing_opponents = [
+            opponent for opponent in opponents if opponent not in team_possession
+        ]
+        if missing_opponents:
+            missing = ', '.join(str(item) for item in missing_opponents)
+            raise ValueError(f'Opponent(s) not found in available possession data: {missing}')
 
         training_frame = _build_possession_training_frame(team_possession)
         if training_frame.empty:
             raise ValueError('Insufficient data to train possession prediction model.')
 
-        features = training_frame[
-            ['team_possession', 'opponent_possession', 'possession_gap']
-        ]
-        target = training_frame['target_possession']
-        model = LinearRegression()
-        model.fit(features, target)
+        model = None
+        try:
+            from sklearn.linear_model import LinearRegression
+            features = training_frame[
+                ['team_possession', 'opponent_possession', 'possession_gap']
+            ]
+            target = training_frame['target_possession']
+            model = LinearRegression()
+            model.fit(features, target)
+        except ImportError:
+            warnings.warn(
+                'scikit-learn is not installed. Falling back to ratio-based '
+                'possession prediction.',
+                RuntimeWarning,
+            )
 
         team_avg_possession = team_possession[team_name]
         predictions = []
         for opponent in opponents:
-            if opponent not in team_possession:
-                raise ValueError(
-                    f'{opponent} not found in available possession data.'
-                )
             opponent_avg_possession = team_possession[opponent]
-            model_features = pd.DataFrame([{
-                'team_possession': team_avg_possession,
-                'opponent_possession': opponent_avg_possession,
-                'possession_gap': team_avg_possession - opponent_avg_possession,
-            }])
-            raw_prediction = float(model.predict(model_features)[0])
+            if model is not None:
+                model_features = pd.DataFrame([{
+                    'team_possession': team_avg_possession,
+                    'opponent_possession': opponent_avg_possession,
+                    'possession_gap': team_avg_possession - opponent_avg_possession,
+                }])
+                raw_prediction = float(model.predict(model_features)[0])
+            else:
+                total = team_avg_possession + opponent_avg_possession
+                raw_prediction = 50.0 if total <= 0 else (team_avg_possession / total) * 100.0
             team_prediction = float(np.clip(raw_prediction, 0.0, 100.0))
             opponent_prediction = 100.0 - team_prediction
             predictions.append({

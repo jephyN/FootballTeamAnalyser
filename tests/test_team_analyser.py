@@ -14,6 +14,7 @@ called.
 import json
 import os
 import warnings
+import builtins
 from unittest.mock import patch
 from urllib.error import URLError
 
@@ -607,11 +608,6 @@ class TestBuildPossessionTrainingFrame:
 class TestPredictNextRoundsPossession:
     """Tests for TeamAnalyzer.predict_next_rounds_possession."""
 
-    @pytest.fixture(autouse=True)
-    def _requires_sklearn(self):
-        """Skip this suite when scikit-learn is not installed."""
-        pytest.importorskip('sklearn')
-
     def test_returns_predictions_for_each_opponent(self, two_team_analyzer):
         """One row is returned per requested opponent."""
         result = two_team_analyzer.predict_next_rounds_possession(
@@ -636,6 +632,24 @@ class TestPredictNextRoundsPossession:
             two_team_analyzer.predict_next_rounds_possession(
                 'Unknown FC', ['Chelsea FC']
             )
+
+    def test_fallback_when_sklearn_missing(self, two_team_analyzer, monkeypatch):
+        """When sklearn is unavailable, fallback mode still returns predictions."""
+        original_import = builtins.__import__
+
+        def _failing_import(name, *args, **kwargs):
+            if name == 'sklearn.linear_model':
+                raise ImportError('sklearn missing')
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, '__import__', _failing_import)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            result = two_team_analyzer.predict_next_rounds_possession(
+                'Arsenal FC', ['Chelsea FC']
+            )
+        assert len(result) == 1
+        assert any('Falling back to ratio-based' in str(w.message) for w in caught)
 # pylint: enable=redefined-outer-name
 
 
