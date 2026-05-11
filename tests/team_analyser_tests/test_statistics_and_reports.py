@@ -1,4 +1,5 @@
 """Tests for calculated metrics and text reports."""
+# pylint: disable=missing-function-docstring,redefined-outer-name
 
 import pandas as pd
 import pytest
