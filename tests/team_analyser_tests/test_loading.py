@@ -1,4 +1,5 @@
 """Tests for API loading and team discovery behaviour."""
+# pylint: disable=missing-function-docstring,protected-access,redefined-outer-name
 
 import warnings
 from unittest.mock import patch
