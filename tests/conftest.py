@@ -112,6 +112,17 @@ def raw_season_stats_payload():
 
 
 @pytest.fixture()
+def patched_env_file_loader():
+    """Return a context manager that prevents loading local .env files."""
+    @contextmanager
+    def _patched_env_file_loader():
+        with patch.object(TeamAnalyzer, '_load_env_file'):
+            yield
+
+    return _patched_env_file_loader
+
+
+@pytest.fixture()
 def patched_fetch_json():
     """Return a context manager that patches TeamAnalyzer._fetch_json."""
     @contextmanager
