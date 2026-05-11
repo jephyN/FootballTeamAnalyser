@@ -1,4 +1,5 @@
 """Tests for API log persistence and .env loading."""
+# pylint: disable=missing-function-docstring,protected-access
 
 import json
 import os
