@@ -1,4 +1,5 @@
 """Tests for small helper methods in team_analyser.py."""
+# pylint: disable=missing-function-docstring,protected-access
 
 import numpy as np
 import pandas as pd
