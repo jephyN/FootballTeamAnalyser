@@ -46,8 +46,8 @@ class TestLoadSampleDataFallback:
             analyzer.load_sample_data(api_key=None, team_name='Chelsea FC')
         assert_default_rows_loaded(analyzer, expected_team='Chelsea FC')
 
-    def test_warns_when_no_key(self, analyzer, patched_fetch_json, without_api_key):
-        with patched_fetch_json():
+    def test_warns_when_no_key(self, analyzer, patched_env_file_loader, without_api_key):
+        with patched_env_file_loader():
             with without_api_key() as caught:
                 analyzer.load_sample_data(api_key=None)
         assert_warning_mentions(caught, 'SPORTSDATA_API_KEY')
