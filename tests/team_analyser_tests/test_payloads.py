@@ -1,4 +1,5 @@
 """Tests for TeamSeasonStats payload parsing and row extraction."""
+# pylint: disable=missing-function-docstring,protected-access,redefined-outer-name
 
 import numpy as np
 import pandas as pd
