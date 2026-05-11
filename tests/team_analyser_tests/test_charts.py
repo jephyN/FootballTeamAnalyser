@@ -1,4 +1,5 @@
 """Tests for chart generation."""
+# pylint: disable=missing-function-docstring
 
 from unittest.mock import patch
 
