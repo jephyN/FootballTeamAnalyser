@@ -6,6 +6,13 @@ import pytest
 
 from team_analyser import _is_nan
 
+from .assertions import assert_contains_text
+
+
+def _report(loaded_analyzer, seasons=(2025, 2026)):
+    """Generate the standard Arsenal report used by report tests."""
+    return loaded_analyzer.generate_report('Arsenal FC', seasons=seasons)
+
 
 class TestCalculateBasicStats:
     """Tests for TeamAnalyzer.calculate_basic_stats."""
@@ -60,26 +67,16 @@ class TestGenerateReport:
     """Tests for TeamAnalyzer.generate_report."""
 
     def test_contains_team_name(self, loaded_analyzer):
-        report = loaded_analyzer.generate_report('Arsenal FC', seasons=(2025, 2026))
-        assert 'Arsenal FC' in report
+        assert_contains_text(_report(loaded_analyzer), 'Arsenal FC')
 
     def test_contains_both_seasons(self, loaded_analyzer):
-        report = loaded_analyzer.generate_report('Arsenal FC', seasons=(2025, 2026))
-        assert '2025' in report
-        assert '2026' in report
+        assert_contains_text(_report(loaded_analyzer), '2025', '2026')
 
-    def test_contains_possession_label(self, loaded_analyzer):
-        report = loaded_analyzer.generate_report('Arsenal FC', seasons=(2025, 2026))
-        assert 'Avg Possession' in report
-
-    def test_contains_shot_accuracy_label(self, loaded_analyzer):
-        report = loaded_analyzer.generate_report('Arsenal FC', seasons=(2025, 2026))
-        assert 'Shot Accuracy' in report
+    def test_contains_metric_labels(self, loaded_analyzer):
+        assert_contains_text(_report(loaded_analyzer), 'Avg Possession', 'Shot Accuracy')
 
     def test_no_data_message_when_season_absent(self, loaded_analyzer):
-        report = loaded_analyzer.generate_report('Arsenal FC', seasons=(2099,))
-        assert 'No data available' in report
+        assert_contains_text(_report(loaded_analyzer, seasons=(2099,)), 'No data available')
 
     def test_percentage_symbol_present(self, loaded_analyzer):
-        report = loaded_analyzer.generate_report('Arsenal FC', seasons=(2025, 2026))
-        assert '%' in report
+        assert_contains_text(_report(loaded_analyzer), '%')
