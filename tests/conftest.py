@@ -112,6 +112,19 @@ def raw_season_stats_payload():
 
 
 @pytest.fixture()
+def patched_fetch_json():
+    """Return a context manager that patches TeamAnalyzer._fetch_json."""
+    @contextmanager
+    def _patched_fetch_json(return_value=None, side_effect=None):
+        with patch.object(
+            TeamAnalyzer, '_fetch_json', return_value=return_value, side_effect=side_effect
+        ):
+            yield
+
+    return _patched_fetch_json
+
+
+@pytest.fixture()
 def without_api_key():
     """Return a context manager that clears API-key state and captures warnings."""
     @contextmanager
