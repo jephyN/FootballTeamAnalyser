@@ -4,7 +4,7 @@ main.py
 Entry point for the Football Team Analyser.
 
 Orchestrates the startup sequence:
-  1. Fetch team list for the dropdown (2026 season only)
+  1. Fetch eligible teams from the 2027 standings for the prediction picker
   2. Fetch logo URLs for all teams in the competition
   3. Show the team picker GUI
   4. Load season data for the selected team (2025 + 2026)
