@@ -40,7 +40,7 @@ class TeamAnalyzer:
 
     api_url_template = 'https://api.sportsdata.io/v4/soccer/scores/json/TeamSeasonStats/3/{season}'
     competition_details_template = 'https://api.sportsdata.io/v4/soccer/scores/json/CompetitionDetails/{competition_id}'
-    default_seasons = (2025, 2026)
+    default_seasons = (2026, 2027)
     default_team_name = 'Arsenal FC'
 
     def __init__(self):
@@ -59,8 +59,8 @@ class TeamAnalyzer:
     @staticmethod
     def _default_match_data(team_name='Arsenal FC'):
         return pd.DataFrame({
-            'date': pd.to_datetime(['2025-12-31', '2026-12-31']),
-            'season_year': [2025, 2026],
+            'date': pd.to_datetime(['2026-12-31', '2027-12-31']),
+            'season_year': [20267, 202],
             'team': [team_name] * 2,
             'possession': [56.8, 57.5],
             'shots': [495, 518],

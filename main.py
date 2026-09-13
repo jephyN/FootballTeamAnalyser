@@ -16,7 +16,7 @@ from gui import pick_team_gui
 from possession_prediction import open_possession_prediction_window
 from team_analyser import TeamAnalyzer
 
-SEASONS = (2025, 2026)
+SEASONS = (2026, 2027)
 
 
 def _show_possession_prediction_launcher(analyzer, team_name, all_teams):
@@ -65,7 +65,7 @@ def main():
     analyzer = TeamAnalyzer()
 
     print(MSG_FETCH_TEAM_LIST)
-    all_teams = analyzer.fetch_all_teams(seasons=(2026,))
+    all_teams = analyzer.fetch_all_teams(seasons=(2027,))
     print(MSG_TEAMS_FOUND.format(count=len(all_teams)))
 
     print(MSG_FETCH_LOGOS)
