@@ -12,6 +12,7 @@ A lightweight Python project for analysing football (soccer) team performance us
   - Shot accuracy (per-round `shots_on_target / shots × 100`, averaged across rounds)
 - Generates a side-by-side text report comparing metrics across seasons.
 - Plots performance trends over seasons (possession and shot accuracy) on a single chart.
+- Adds a possession prediction window (scikit-learn based) for upcoming rounds versus possible opponents, with Team + Opponent = 100%.
 - Writes a timestamped JSON log of all raw API data for the selected team on each run.
 
 ## ⚠️ SportsData.io Licence Limitations
@@ -31,7 +32,17 @@ This project relies on the [SportsData.io](https://sportsdata.io) API. Access to
 ```text
 .
 ├── main.py             # Entry point — orchestrates the startup sequence
-├── team_analyser.py    # TeamAnalyzer class — data loading, stats, report, chart
+├── team_analyser.py    # TeamAnalyzer public API (coordinates modules)
+├── analyzer_http.py    # API/env/http helpers
+├── analyzer_payloads.py# Payload parsing/normalization helpers
+├── analyzer_logging.py # Raw API log writing
+├── analyzer_data_ops.py# Data loading/discovery operations
+├── analyzer_reporting.py # Stats/report formatting helpers
+├── analyzer_plotting.py # Chart helpers
+├── prediction_model.py  # scikit-learn (or numpy fallback) possession model
+├── prediction_window.py # Possession prediction result window
+├── possession_prediction.py # Public prediction API (facade)
+├── analyzer_utils.py   # Backward-compatible utility re-exports
 ├── gui.py              # Team picker GUI (tkinter, background icon loading)
 ├── logo_utils.py       # Wikimedia logo URL resolution and PIL image fetching
 ├── tests/
@@ -63,7 +74,7 @@ logs/<team_name_lowercase>_api_data_<YYYYMMDD_HHMMSS>.json
 Install third-party dependencies:
 
 ```bash
-pip install pandas numpy matplotlib Pillow
+pip install pandas numpy matplotlib Pillow scikit-learn
 ```
 
 ## Environment Configuration
