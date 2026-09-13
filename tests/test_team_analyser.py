@@ -894,6 +894,69 @@ class TestFetchAllTeams:
 
 
 # ---------------------------------------------------------------------------
+# TeamAnalyzer.fetch_prediction_teams
+# ---------------------------------------------------------------------------
+
+# pylint: disable=redefined-outer-name
+class TestFetchPredictionTeams:
+    """Tests for filtering prediction teams from standings payloads."""
+
+    def test_uses_only_non_empty_standings_lists(self, analyzer):
+        """Teams in empty or missing standings lists are excluded."""
+        payload = [
+            {
+                'Name': 'League table',
+                'Standings': [
+                    {'Name': 'Arsenal FC'},
+                    {'Name': 'Chelsea FC'},
+                    {'Name': 'Arsenal FC'},
+                ],
+            },
+            {'Name': 'Unpublished round', 'Standings': []},
+            {'Name': 'Future round'},
+        ]
+
+        with patch.object(TeamAnalyzer, '_fetch_json', return_value=payload) as fetch:
+            teams = analyzer.fetch_prediction_teams(api_key='key')
+
+        assert teams == ['Arsenal FC', 'Chelsea FC']
+        assert 'Standings/3/2027' in fetch.call_args.args[0]
+
+    def test_accepts_rounds_wrapper(self, analyzer):
+        """A payload wrapped in Rounds is parsed like the direct API response."""
+        payload = {'Rounds': [{'Standings': [{'TeamName': 'Juventus'}]}]}
+        with patch.object(TeamAnalyzer, '_fetch_json', return_value=payload):
+            teams = analyzer.fetch_prediction_teams(api_key='key')
+        assert teams == ['Juventus']
+
+    def test_accepts_a_single_round_payload(self, analyzer):
+        """A direct round object is accepted when it exposes Standings itself."""
+        payload = {'Standings': [{'Name': 'Paris Saint-Germain'}]}
+        with patch.object(TeamAnalyzer, '_fetch_json', return_value=payload):
+            teams = analyzer.fetch_prediction_teams(api_key='key')
+        assert teams == ['Paris Saint-Germain']
+
+    def test_returns_fallback_when_every_standings_list_is_empty(self, analyzer):
+        """Empty standings do not make otherwise unavailable teams selectable."""
+        payload = [{'Standings': []}, {'Standings': None}]
+        with patch.object(TeamAnalyzer, '_fetch_json', return_value=payload):
+            with warnings.catch_warnings(record=True):
+                warnings.simplefilter('always')
+                teams = analyzer.fetch_prediction_teams(api_key='key')
+        assert teams == [TeamAnalyzer.default_team_name]
+
+    def test_returns_fallback_without_api_key(self, analyzer):
+        """The existing offline behaviour remains available without a key."""
+        with patch.dict(os.environ, {}, clear=True):
+            with patch.object(TeamAnalyzer, '_load_env_file'):
+                with warnings.catch_warnings(record=True):
+                    warnings.simplefilter('always')
+                    teams = analyzer.fetch_prediction_teams(api_key=None)
+        assert teams == [TeamAnalyzer.default_team_name]
+# pylint: enable=redefined-outer-name
+
+
+# ---------------------------------------------------------------------------
 # TeamAnalyzer.plot_performance_trends
 # ---------------------------------------------------------------------------
 
@@ -1025,3 +1088,4 @@ class TestLoadEnvFile:
         """A path that does not exist returns silently."""
         TeamAnalyzer._load_env_file('/nonexistent/.env')
 # pylint: enable=protected-access
+

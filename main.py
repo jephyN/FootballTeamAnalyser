@@ -4,7 +4,7 @@ main.py
 Entry point for the Football Team Analyser.
 
 Orchestrates the startup sequence:
-  1. Fetch team list for the dropdown (2026 season only)
+  1. Fetch eligible teams from the 2027 standings for the prediction picker
   2. Fetch logo URLs for all teams in the competition
   3. Show the team picker GUI
   4. Load season data for the selected team (2025 + 2026)
@@ -26,6 +26,7 @@ from app_strings import (
 )
 
 SEASONS = (2025, 2026)
+PREDICTION_STANDINGS_SEASON = 2027
 
 
 def main():
@@ -33,7 +34,9 @@ def main():
     analyzer = TeamAnalyzer()
 
     print(MSG_FETCH_TEAM_LIST)
-    all_teams = analyzer.fetch_all_teams(seasons=(2026,))
+    all_teams = analyzer.fetch_prediction_teams(
+        season_year=PREDICTION_STANDINGS_SEASON
+    )
     print(MSG_TEAMS_FOUND.format(count=len(all_teams)))
 
     print(MSG_FETCH_LOGOS)
@@ -58,3 +61,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
