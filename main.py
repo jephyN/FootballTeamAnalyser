@@ -26,6 +26,7 @@ from app_strings import (
 )
 
 SEASONS = (2025, 2026)
+PREDICTION_STANDINGS_SEASON = 2027
 
 
 def main():
@@ -33,7 +34,9 @@ def main():
     analyzer = TeamAnalyzer()
 
     print(MSG_FETCH_TEAM_LIST)
-    all_teams = analyzer.fetch_all_teams(seasons=(2026,))
+    all_teams = analyzer.fetch_prediction_teams(
+        season_year=PREDICTION_STANDINGS_SEASON
+    )
     print(MSG_TEAMS_FOUND.format(count=len(all_teams)))
 
     print(MSG_FETCH_LOGOS)
@@ -58,3 +61,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
