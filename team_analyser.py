@@ -146,6 +146,10 @@ class TeamAnalyzer:
     competition_details_template = (
         'https://api.sportsdata.io/v4/soccer/scores/json/CompetitionDetails/{competition_id}'
     )
+    standings_url_template = (
+        'https://api.sportsdata.io/v4/soccer/scores/json/Standings/'
+        '{competition_id}/{season}'
+    )
     default_seasons = (2025, 2026)
     default_team_name = 'Arsenal FC'
 
@@ -557,6 +561,80 @@ class TeamAnalyzer:
             return [self.default_team_name]
         return sorted(team_names)
 
+    @staticmethod
+    def _team_names_from_standings(payload):
+        """Return names from non-empty ``Standings`` lists in a payload.
+
+        The standings endpoint returns one record per round.  Rounds without
+        standings do not represent teams that can be selected for a prediction.
+        """
+        if isinstance(payload, list):
+            rounds = payload
+        elif isinstance(payload, dict):
+            rounds = payload.get('Rounds') or payload.get('rounds')
+            if rounds is None and isinstance(payload.get('Standings'), list):
+                rounds = [payload]
+            rounds = rounds or []
+        else:
+            rounds = []
+
+        team_names = set()
+        for round_data in rounds:
+            if not isinstance(round_data, dict):
+                continue
+            standings = round_data.get('Standings')
+            if not isinstance(standings, list) or not standings:
+                continue
+            for standing in standings:
+                if not isinstance(standing, dict):
+                    continue
+                name = TeamAnalyzer._pick_value(
+                    standing, 'Name', 'TeamName', 'Team', 'TeamKey'
+                )
+                if not _is_nan(name):
+                    team_name = str(name).strip()
+                    if team_name:
+                        team_names.add(team_name)
+        return sorted(team_names)
+
+    def fetch_prediction_teams(
+        self, api_key=None, competition_id=3, season_year=2027
+    ):
+        """Return the teams eligible for prediction from competition standings.
+
+        Only teams listed in a non-empty ``Standings`` collection are returned.
+        This keeps teams from rounds without standings out of the picker.
+        """
+        self._load_env_file()
+        resolved_api_key = api_key or os.getenv('SPORTSDATA_API_KEY')
+        if not resolved_api_key:
+            warnings.warn(
+                'SPORTSDATA_API_KEY is not configured. Returning fallback team list.',
+                RuntimeWarning,
+            )
+            return [self.default_team_name]
+
+        url = self.standings_url_template.format(
+            competition_id=competition_id, season=season_year
+        )
+        try:
+            payload = self._fetch_json(url, headers=_build_api_headers(resolved_api_key))
+        except (URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+            warnings.warn(
+                f'Could not fetch prediction teams ({exc}). Returning fallback team list.',
+                RuntimeWarning,
+            )
+            return [self.default_team_name]
+
+        team_names = self._team_names_from_standings(payload)
+        if not team_names:
+            warnings.warn(
+                'No non-empty standings found. Returning fallback team list.',
+                RuntimeWarning,
+            )
+            return [self.default_team_name]
+        return team_names
+
     def _fetch_team_names_for_season(self, season_year, api_key):
         """Fetch and return team names for a specific season year."""
         url = self._url_for_season(season_year)
@@ -669,3 +747,4 @@ class TeamAnalyzer:
             x=title_x,
         )
         return fig
+
