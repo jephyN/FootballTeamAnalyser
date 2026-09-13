@@ -14,11 +14,13 @@ class _NumpyLinearRegression:
         self.coef_ = None
 
     def fit(self, x, y):
+        """Fit coefficients using least-squares regression."""
         ones = np.ones((x.shape[0], 1))
         design = np.hstack((ones, x))
         self.coef_, *_ = np.linalg.lstsq(design, y, rcond=None)
 
     def predict(self, x):
+        """Predict targets for the supplied feature rows."""
         ones = np.ones((x.shape[0], 1))
         design = np.hstack((ones, x))
         return design @ self.coef_
